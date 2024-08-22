@@ -231,6 +231,7 @@ contains
     ! ice states
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'ice_mask'                    )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'ice_fraction'                )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'Si_thick'                    )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'sea_ice_surface_temperature' )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_ice_volume'             )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_snow_volume'            )
@@ -250,7 +251,6 @@ contains
             ungridded_lbound=1, ungridded_ubound=ncat)
     end if
     if (flds_wave) then
-       call fldlist_add(fldsFrIce_num, fldsFrIce, 'Si_thick'                 )
        call fldlist_add(fldsFrIce_num, fldsFrIce, 'Si_floediam'              )
     end if
 
@@ -970,14 +970,14 @@ contains
              ! surface temperature
              Tsrf(i,j,iblk)  = Tffresh + trcr(i,j,1,iblk)     !Kelvin (original ???)
 
-             if (tr_fsd) then
-                ! floe thickness (m)
-                if (aice(i,j,iblk) > puny) then
-                   floethick(i,j,iblk) = vice(i,j,iblk) / aice(i,j,iblk)
-                else
-                   floethick(i,j,iblk) = c0
-                end if
+             ! floe thickness (m)
+             if (aice(i,j,iblk) > puny) then
+                floethick(i,j,iblk) = vice(i,j,iblk) / aice(i,j,iblk)
+             else
+                floethick(i,j,iblk) = c0
+             end if
 
+             if (tr_fsd) then
                 ! floe diameter (m)
                 workx = c0
                 worky = c0
