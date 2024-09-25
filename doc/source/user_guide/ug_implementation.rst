@@ -379,7 +379,7 @@ Several predefined rectangular grids are available in CICE with
 where 12, 80, 128, and 180 are the number of gridcells in each direction.
 Several predefined options also exist, set with **cice.setup --set**, to
 establish varied idealized configurations of box tests including ``box2001``, 
-``boxadv``, ``boxchan``, ``boxnodyn``, ``boxrestore``, ``boxslotcyl``, and
+``boxadv``, ``boxchan``, ``boxchan1e``, ``boxchan1n``, ``boxnodyn``, ``boxrestore``, ``boxslotcyl``, and
 ``boxopen``, ``boxclosed``, and ``boxforcee``.  See **cice.setup --help** for a current 
 list of supported settings.
 
@@ -891,6 +891,8 @@ will be relative to the model initial date specified by ``year_init``,
 in setting output frequencies.  `init` is the default for
 ``dumpfreq_base`` and makes it easy to generate restarts
 5 or 10 model days after startup as we often do in testing.
+Both ``histfreq_base`` and ``dumpfreq_base`` are arrays
+and can be set for each stream separately.
 
 In general, output is always
 written at the start of the year, month, day, or hour without
@@ -1037,7 +1039,7 @@ used in coupled models.
 MPI is initialized in *init\_communicate* for both coupled and
 stand-alone MPI runs. The ice component communicates with a flux coupler
 or other climate components via external routines that handle the
-variables listed in the `Icepack documentation <https://cice-consortium-icepack.readthedocs.io/en/master/science_guide/index.html>`_.
+variables listed in the `Icepack documentation <https://cice-consortium-icepack.readthedocs.io/en/main/science_guide/index.html>`_.
 For stand-alone runs,
 routines in **ice\_forcing.F90** read and interpolate data from files,
 and are intended merely to provide guidance for the user to write his or
@@ -1154,7 +1156,8 @@ io package.  The namelist variable ``history_format`` further refines the
 format approach or style for some io packages.
 
 Model output data can be written as instantaneous or average data as specified
-by the ``hist_avg`` namelist flag.  The data is written at the period(s) given by ``histfreq`` and
+by the ``hist_avg`` namelist array and is customizable by stream.  The data is 
+written at the period(s) given by ``histfreq`` and
 ``histfreq_n`` relative to a reference date specified by ``histfreq_base``.  
 The files are written to binary or netCDF files prepended by ``history_file``
 in **ice_in**. These settings for history files are set in the 
@@ -1196,8 +1199,11 @@ with a given ``histfreq`` value, or if an element of ``histfreq_n`` is 0, then
 no file will be written at that frequency. The output period can be
 discerned from the filenames.  All history streams will be either instantaneous
 or averaged as specified by the ``hist_avg`` namelist setting and the frequency
-will be relative to a reference date specified by ``histfreq_base``.  More
-information about how the frequency is computed is found in :ref:`timemanager`.
+will be relative to a reference date specified by ``histfreq_base``.  Also, some
+Earth Sytem Models require the history file time axis to be centered in the averaging
+interval. The flag ``hist_time_axis`` will allow the user to chose ``begin``, ``middle``,
+or ``end`` for the time stamp. More information about how the frequency is 
+computed is found in :ref:`timemanager`.
 
 For example, in the namelist:
 
@@ -1206,7 +1212,7 @@ For example, in the namelist:
   histfreq = ’1’, ’h’, ’d’, ’m’, ’y’
   histfreq_n = 1, 6, 0, 1, 1
   histfreq_base = 'zero'
-  hist_avg = .true.
+  hist_avg = .true.,.true.,.true.,.true.,.true.
   f_hi = ’1’
   f_hs = ’h’
   f_Tsfc = ’d’
@@ -1404,7 +1410,8 @@ The restart files created by CICE contain all of the variables needed
 for a full, exact restart. The filename begins with the character string
 ‘iced.’, and the restart dump frequency is given by the namelist
 variables ``dumpfreq`` and ``dumpfreq_n`` relative to a reference date
-specified by ``dumpfreq_base``. The pointer to the filename from
+specified by ``dumpfreq_base``.  Multiple restart frequencies are supported
+in the code with a similar mechanism to history streams.  The pointer to the filename from
 which the restart data is to be read for a continuation run is set in
 ``pointer_file``. The code assumes that auxiliary binary tracer restart
 files will be identified using the same pointer and file name prefix,

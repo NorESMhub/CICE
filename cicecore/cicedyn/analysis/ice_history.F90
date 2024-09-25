@@ -92,7 +92,7 @@
       logical (kind=log_kind) :: formdrag
       logical (kind=log_kind) :: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, tr_brine
       logical (kind=log_kind) :: tr_fsd, tr_snow
-      logical (kind=log_kind) :: skl_bgc, solve_zsal, solve_zbgc, z_tracers
+      logical (kind=log_kind) :: skl_bgc, solve_zbgc, z_tracers
       integer (kind=int_kind) :: n, ns, ns1, ns2
       integer (kind=int_kind), dimension(max_nstrm) :: &
          ntmp
@@ -222,7 +222,7 @@
       call icepack_query_parameters(rhofresh_out=rhofresh, Tffresh_out=Tffresh, &
          secday_out=secday, rad_to_deg_out=rad_to_deg)
       call icepack_query_parameters(formdrag_out=formdrag, skl_bgc_out=skl_bgc, &
-         solve_zsal_out=solve_zsal, solve_zbgc_out=solve_zbgc, z_tracers_out=z_tracers)
+         solve_zbgc_out=solve_zbgc, z_tracers_out=z_tracers)
       call icepack_query_tracer_flags(tr_iage_out=tr_iage, tr_FY_out=tr_FY, &
          tr_lvl_out=tr_lvl, tr_pond_out=tr_pond, tr_aero_out=tr_aero, &
          tr_brine_out=tr_brine, tr_fsd_out=tr_fsd, tr_snow_out=tr_snow)
@@ -263,7 +263,7 @@
                     trim(tmpstr2), file=__FILE__, line=__LINE__)
             endif
          end do
-         
+
          close(nu_nml)
          call release_fileunit(nu_nml)
       endif
@@ -2225,7 +2225,7 @@
       n4Dfcum = n4Dscum + num_avail_hist_fields_4Df ! should equal num_avail_hist_fields_tot
 
       do ns = 1,nstreams
-         if (.not. hist_avg) then  ! write snapshots
+         if (.not. hist_avg(ns)) then  ! write snapshots
            do n = 1,n2D
               if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
                   a2D(:,:,n,:) = c0
