@@ -82,13 +82,13 @@
       use ice_history_shared, only: hist_avg, history_dir, history_file, &
                              incond_dir, incond_file, version_name, &
                              history_precision, history_format, hist_time_axis
-      use ice_flux, only: update_ocn_f, l_mpond_fresh
+      use ice_flux, only: update_ocn_f, cpl_frazil, l_mpond_fresh
       use ice_flux, only: default_season
       use ice_flux_bgc, only: cpl_bgc
       use ice_forcing, only: &
           ycycle,          fyear_init,    debug_forcing, &
           atm_data_type,   atm_data_dir,  precip_units, rotate_wind, &
-          atm_data_format, ocn_data_format, &
+          atm_data_format, ocn_data_format, atm_data_version, &
           bgc_data_type, &
           ocn_data_type, ocn_data_dir, wave_spec_file,  &
           oceanmixed_file, restore_ocn, trestore, &
@@ -105,7 +105,7 @@
                           grid_ocn, grid_ocn_thrm, grid_ocn_dynu, grid_ocn_dynv, &
                           grid_atm, grid_atm_thrm, grid_atm_dynu, grid_atm_dynv, &
                           dxrect, dyrect, dxscale, dyscale, scale_dxdy, &
-                          lonrefrect, latrefrect, pgl_global_ext
+                          lonrefrect, latrefrect, save_ghte_ghtn
       use ice_dyn_shared, only: ndte, kdyn, revised_evp, yield_curve, &
                                 evp_algorithm, visc_method,     &
                                 seabed_stress, seabed_stress_method,  &
@@ -265,7 +265,7 @@
         highfreq,       natmiter,        atmiter_conv,  calc_dragio,    &
         ustar_min,      emissivity,      iceruf,        iceruf_ocn,     &
         fbot_xfer_type, update_ocn_f,    l_mpond_fresh, tfrz_option,    &
-        saltflux_option,ice_ref_salinity,                               &
+        saltflux_option,ice_ref_salinity,cpl_frazil,                    &
         oceanmixed_ice, restore_ice,     restore_ocn,   trestore,       &
         precip_units,   default_season,  wave_spec_type,nfreq,          &
         atm_data_type,  ocn_data_type,   bgc_data_type, fe_data_type,   &
@@ -273,7 +273,7 @@
         fyear_init,     ycycle,          wave_spec_file,restart_coszen, &
         atm_data_dir,   ocn_data_dir,    bgc_data_dir,                  &
         atm_data_format, ocn_data_format, rotate_wind,                  &
-        oceanmixed_file
+        oceanmixed_file, atm_data_version
 
       !-----------------------------------------------------------------
       ! default values
@@ -375,7 +375,7 @@
       ndte = 120         ! subcycles per dynamics timestep:  ndte=dt_dyn/dte
       evp_algorithm = 'standard_2d'  ! EVP kernel (standard_2d=standard cice evp; shared_mem_1d=1d shared memory and no mpi
       elasticDamp = 0.36_dbl_kind    ! coefficient for calculating the parameter E
-      pgl_global_ext = .false.       ! if true, init primary grid lengths (global ext.)
+      save_ghte_ghtn = .false.       ! if true, save global hte and htn (global ext.)
       brlx   = 300.0_dbl_kind ! revised_evp values. Otherwise overwritten in ice_dyn_shared
       arlx   = 300.0_dbl_kind ! revised_evp values. Otherwise overwritten in ice_dyn_shared
       revised_evp = .false.   ! if true, use revised procedure for evp dynamics
@@ -444,6 +444,7 @@
       ktransport = 1           ! -1 = off, 1 = on
       calc_Tsfc = .true.       ! calculate surface temperature
       update_ocn_f = .false.   ! include fresh water and salt fluxes for frazil
+      cpl_frazil = 'fresh_ice_correction' ! type of coupling for frazil ice
       ustar_min = 0.005        ! minimum friction velocity for ocean heat flux (m/s)
       hi_min = p01             ! minimum ice thickness allowed (m)
       iceruf = 0.0005_dbl_kind ! ice surface roughness at atmosphere interface (m)
@@ -500,6 +501,7 @@
       atm_data_format = 'bin'     ! file format ('bin'=binary or 'nc'=netcdf)
       atm_data_type   = 'default'
       atm_data_dir    = ' '
+      atm_data_version = '_undef'  ! date atm_data_file was generated.
       rotate_wind     = .true.    ! rotate wind/stress composants to computational grid orientation
       calc_strair     = .true.    ! calculate wind stress
       formdrag        = .false.   ! calculate form drag
@@ -961,7 +963,6 @@
       call broadcast_scalar(ndte,                 master_task)
       call broadcast_scalar(evp_algorithm,        master_task)
       call broadcast_scalar(elasticDamp,          master_task)
-      call broadcast_scalar(pgl_global_ext,       master_task)
       call broadcast_scalar(brlx,                 master_task)
       call broadcast_scalar(arlx,                 master_task)
       call broadcast_scalar(revised_evp,          master_task)
@@ -1063,6 +1064,7 @@
       call broadcast_scalar(atm_data_format,      master_task)
       call broadcast_scalar(atm_data_type,        master_task)
       call broadcast_scalar(atm_data_dir,         master_task)
+      call broadcast_scalar(atm_data_version,     master_task)
       call broadcast_scalar(rotate_wind,          master_task)
       call broadcast_scalar(calc_strair,          master_task)
       call broadcast_scalar(calc_Tsfc,            master_task)
@@ -1071,6 +1073,7 @@
       call broadcast_scalar(natmiter,             master_task)
       call broadcast_scalar(atmiter_conv,         master_task)
       call broadcast_scalar(update_ocn_f,         master_task)
+      call broadcast_scalar(cpl_frazil,           master_task)
       call broadcast_scalar(l_mpond_fresh,        master_task)
       call broadcast_scalar(ustar_min,            master_task)
       call broadcast_scalar(hi_min,               master_task)
@@ -1254,6 +1257,10 @@
          abort_list = trim(abort_list)//":5"
       endif
 
+      if (kdyn == 1 .and. evp_algorithm == 'shared_mem_1d') then
+         save_ghte_ghtn = .true.
+      endif
+
       if (kdyn == 2 .and. revised_evp) then
          if (my_task == master_task) then
             write(nu_diag,*) subname//' WARNING: revised_evp = T with EAP dynamics'
@@ -1292,10 +1299,10 @@
       endif
 
       if (grid_ice == 'C' .or. grid_ice == 'CD') then
-         if (kdyn > 1) then
+         if (kdyn > 1 .or. (kdyn == 1 .and. evp_algorithm /= 'standard_2d')) then
             if (my_task == master_task) then
-               write(nu_diag,*) subname//' ERROR: grid_ice = C | CD only supported with kdyn<=1 (evp or off)'
-               write(nu_diag,*) subname//' ERROR: kdyn and grid_ice inconsistency'
+              write(nu_diag,*) subname//' ERROR: grid_ice = C | CD only supported with kdyn=1 and evp_algorithm=standard_2d'
+              write(nu_diag,*) subname//' ERROR: kdyn and/or evp_algorithm and grid_ice inconsistency'
             endif
             abort_list = trim(abort_list)//":46"
          endif
@@ -1306,6 +1313,15 @@
             endif
             abort_list = trim(abort_list)//":44"
          endif
+      endif
+
+      if (evp_algorithm == 'shared_mem_1d' .and. &
+          grid_type     == 'tripole') then
+          if (my_task == master_task) then
+              write(nu_diag,*) subname//' ERROR: evp_algorithm=shared_mem_1d is not tested for gridtype=tripole'
+              write(nu_diag,*) subname//' ERROR: change evp_algorithm to standard_2d'
+          endif
+          abort_list = trim(abort_list)//":49"
       endif
 
       capping = -9.99e30
@@ -1510,15 +1526,14 @@
          abort_list = trim(abort_list)//":13"
       endif
 
-! tcraig, is it really OK for users to run inconsistently?
-! ech: yes, for testing sensitivities.  It's not recommended for science runs
-      if (ktherm == 1 .and. trim(tfrz_option(1:11)) /= 'linear_salt') then
+! ech: allow inconsistency for testing sensitivities.  It's not recommended for science runs
+      if (ktherm == 1 .and. trim(tfrz_option) /= 'linear_salt') then
          if (my_task == master_task) then
             write(nu_diag,*) subname//' WARNING: ktherm = 1 and tfrz_option = ',trim(tfrz_option)
             write(nu_diag,*) subname//' WARNING:   For consistency, set tfrz_option = linear_salt'
          endif
       endif
-      if (ktherm == 2 .and. trim(tfrz_option(1:5)) /= 'mushy') then
+      if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
          if (my_task == master_task) then
             write(nu_diag,*) subname//' WARNING: ktherm = 2 and tfrz_option = ',trim(tfrz_option)
             write(nu_diag,*) subname//' WARNING:   For consistency, set tfrz_option = mushy'
@@ -1530,7 +1545,6 @@
             write(nu_diag,*) subname//' WARNING:   For consistency, set saltflux_option = constant'
          endif
       endif
-!tcraig
       if (ktherm == 1 .and. .not.sw_redist) then
          if (my_task == master_task) then
             write(nu_diag,*) subname//' WARNING: ktherm = 1 and sw_redist = ',sw_redist
@@ -1831,7 +1845,6 @@
                   tmpstr2 = ' : standard 2d EVP solver'
                elseif (evp_algorithm == 'shared_mem_1d') then
                   tmpstr2 = ' : vectorized 1d EVP solver'
-                  pgl_global_ext = .true.
                else
                   tmpstr2 = ' : unknown value'
                endif
@@ -2104,19 +2117,19 @@
          if (trim(saltflux_option) == 'constant') then
             write(nu_diag,1002) ' ice_ref_salinity = ',ice_ref_salinity
          endif
-         if (trim(tfrz_option(1:8)) == 'constant') then
+         if (trim(tfrz_option) == 'constant') then
             tmpstr2 = ' : constant ocean freezing temperature (Tocnfrz)'
-         elseif (trim(tfrz_option(1:8)) == 'minus1p8') then
+         elseif (trim(tfrz_option) == 'minus1p8') then
             tmpstr2 = ' : constant ocean freezing temperature (-1.8C) (to be deprecated)'
-         elseif (trim(tfrz_option(1:11)) == 'linear_salt') then
+         elseif (trim(tfrz_option) == 'linear_salt') then
             tmpstr2 = ' : linear function of salinity (use with ktherm=1)'
-         elseif (trim(tfrz_option(1:5)) == 'mushy') then
+         elseif (trim(tfrz_option) == 'mushy') then
             tmpstr2 = ' : Assur (1958) as in mushy-layer thermo (ktherm=2)'
          else
             tmpstr2 = ' : unknown value'
          endif
          write(nu_diag,1030) ' tfrz_option      = ', trim(tfrz_option),trim(tmpstr2)
-         if (trim(tfrz_option(1:8)) == 'constant') then
+         if (trim(tfrz_option) == 'constant') then
             write(nu_diag,1002) ' Tocnfrz          = ', Tocnfrz
          endif
          if (update_ocn_f) then
@@ -2125,6 +2138,7 @@
             tmpstr2 = ' : frazil water/salt fluxes not included in ocean fluxes'
          endif
          write(nu_diag,1010) ' update_ocn_f     = ', update_ocn_f,trim(tmpstr2)
+         write(nu_diag,1030) ' cpl_frazil       = ', trim(cpl_frazil)
          if (l_mpond_fresh .and. tr_pond_topo) then
             tmpstr2 = ' : retain (topo) pond water until ponds drain'
          else
@@ -2379,6 +2393,8 @@
          write(nu_diag,1021) ' fyear_init       = ', fyear_init
          write(nu_diag,1021) ' ycycle           = ', ycycle
          write(nu_diag,1031) ' atm_data_type    = ', trim(atm_data_type)
+         write(nu_diag,1031) ' atm_data_version = ', trim(atm_data_version)
+
          if (trim(atm_data_type) /= 'default') then
             write(nu_diag,1031) ' atm_data_dir     = ', trim(atm_data_dir)
             write(nu_diag,1031) ' precip_units     = ', trim(precip_units)
@@ -2512,8 +2528,8 @@
          floediam_in=floediam, hfrazilmin_in=hfrazilmin, Tliquidus_max_in=Tliquidus_max, &
          aspect_rapid_mode_in=aspect_rapid_mode, dSdt_slow_mode_in=dSdt_slow_mode, &
          phi_c_slow_mode_in=phi_c_slow_mode, phi_i_mushy_in=phi_i_mushy, conserv_check_in=conserv_check, &
-         wave_spec_type_in = wave_spec_type, &
-         wave_spec_in=wave_spec, nfreq_in=nfreq, &
+         wave_spec_type_in = wave_spec_type, wave_spec_in=wave_spec, nfreq_in=nfreq, &
+         update_ocn_f_in=update_ocn_f, cpl_frazil_in=cpl_frazil, &
          tfrz_option_in=tfrz_option, kalg_in=kalg, fbot_xfer_type_in=fbot_xfer_type, &
          saltflux_option_in=saltflux_option, ice_ref_salinity_in=ice_ref_salinity, &
          Pstar_in=Pstar, Cstar_in=Cstar, iceruf_in=iceruf, iceruf_ocn_in=iceruf_ocn, calc_dragio_in=calc_dragio, &
@@ -2934,7 +2950,7 @@
          indxi, indxj    ! compressed indices for cells with aicen > puny
 
       real (kind=dbl_kind) :: &
-         Tsfc, sum, hbar, abar, puny, rhos, Lfresh, rad_to_deg, rsnw_fall, dist_ratio, Tffresh
+         Tsfc, asum, hbar, abar, puny, rhos, Lfresh, rad_to_deg, rsnw_fall, dist_ratio, Tffresh
 
       real (kind=dbl_kind), dimension(ncat) :: &
          ainit, hinit    ! initial area, thickness
@@ -3070,7 +3086,7 @@
                        ! Note: the resulting average ice thickness
                        ! tends to be less than hbar due to the
                        ! nonlinear distribution of ice thicknesses
-            sum = c0
+            asum = c0
             do n = 1, ncat
                if (n < ncat) then
                   hinit(n) = p5*(hin_max(n-1) + hin_max(n)) ! m
@@ -3079,10 +3095,10 @@
                endif
                ! parabola, max at h=hbar, zero at h=0, 2*hbar
                ainit(n) = max(c0, (c2*hbar*hinit(n) - hinit(n)**2))
-               sum = sum + ainit(n)
+               asum = asum + ainit(n)
             enddo
             do n = 1, ncat
-               ainit(n) = ainit(n) / (sum + puny/ncat) ! normalize
+               ainit(n) = ainit(n) / (asum + puny/ncat) ! normalize
             enddo
 
          else
