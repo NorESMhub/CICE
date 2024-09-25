@@ -33,6 +33,46 @@ cat >> ${jobfile} << EOFB
 #PBS -l walltime=${batchtime}
 EOFB
 
+else if (${ICE_MACHINE} =~ derecho*) then
+cat >> ${jobfile} << EOFB
+#PBS -q ${queue}
+#PBS -l job_priority=regular
+#PBS -N ${ICE_CASENAME}
+#PBS -A ${acct}
+#PBS -l select=${nnodes}:ncpus=${corespernode}:mpiprocs=${taskpernodelimit}:ompthreads=${nthrds}
+#PBS -l walltime=${batchtime}
+#PBS -j oe
+#PBS -W umask=022
+#PBS -o ${ICE_CASEDIR}
+###PBS -M username@domain.com
+###PBS -m be
+EOFB
+
+else if (${ICE_MACHINE} =~ gadi*) then
+if (${queue} =~ *sr) then #sapphire rapids
+  @ memuse = ( $ncores * 481 / 100 )
+else if (${queue} =~ *bw) then #broadwell
+  @ memuse = ( $ncores * 457 / 100 )
+else if (${queue} =~ *sl) then 
+  @ memuse = ( $ncores * 6 )
+else #normal queues
+  @ memuse = ( $ncores * 395 / 100 )
+endif
+cat >> ${jobfile} << EOFB
+#PBS -q ${queue}
+#PBS -P ${ICE_MACHINE_PROJ}
+#PBS -N ${ICE_CASENAME}
+#PBS -l storage=gdata/${ICE_MACHINE_PROJ}+scratch/${ICE_MACHINE_PROJ}+gdata/ik11
+#PBS -l ncpus=${ncores}
+#PBS -l mem=${memuse}gb
+#PBS -l walltime=${batchtime}
+#PBS -j oe 
+#PBS -W umask=003
+#PBS -o ${ICE_CASEDIR}
+source /etc/profile.d/modules.csh
+module use `echo ${MODULEPATH} | sed 's/:/ /g'` #copy the users modules
+EOFB
+
 else if (${ICE_MACHINE} =~ gust*) then
 cat >> ${jobfile} << EOFB
 #PBS -q ${queue}
@@ -68,7 +108,7 @@ cat >> ${jobfile} << EOFB
 #PBS -l walltime=${batchtime}
 EOFB
 
-else if (${ICE_MACHINE} =~ gaffney* || ${ICE_MACHINE} =~ koehr* || ${ICE_MACHINE} =~ mustang*) then
+else if (${ICE_MACHINE} =~ gaffney* || ${ICE_MACHINE} =~ koehr* || ${ICE_MACHINE} =~ mustang* || ${ICE_MACHINE} =~ carpenter*) then
 cat >> ${jobfile} << EOFB
 #PBS -N ${shortcase}
 #PBS -q ${queue}
@@ -153,6 +193,23 @@ cat >> ${jobfile} << EOFB
 ###SBATCH --mail-user username@domain.com
 EOFB
 
+else if (${ICE_MACHINE} =~ perlmutter*) then
+@ nthrds2 = ${nthrds} * 2
+cat >> ${jobfile} << EOFB
+#SBATCH -J ${ICE_CASENAME}
+#SBATCH -A ${acct}
+#SBATCH --qos=${queue}
+#SBATCH --time=${batchtime}
+#SBATCH --nodes=${nnodes}
+#SBATCH --ntasks=${ntasks}
+#SBATCH --cpus-per-task=${nthrds2}
+#SBATCH --constraint cpu
+###SBATCH -e filename
+###SBATCH -o filename
+###SBATCH --mail-type FAIL
+###SBATCH --mail-user username@domain.com
+EOFB
+
 else if (${ICE_MACHINE} =~ compy*) then
 if (${runlength} <= 2) set queue = "short"
 cat >> ${jobfile} <<EOFB
@@ -169,7 +226,7 @@ cat >> ${jobfile} <<EOFB
 ###SBATCH --mail-user username@domain.com
 EOFB
 
-else if (${ICE_MACHINE} =~ badger*) then
+else if (${ICE_MACHINE} =~ chicoma*) then
 cat >> ${jobfile} << EOFB
 #SBATCH -J ${ICE_CASENAME}
 #SBATCH -t ${batchtime}
@@ -179,7 +236,9 @@ cat >> ${jobfile} << EOFB
 #SBATCH -o slurm%j.out
 ###SBATCH --mail-type END,FAIL
 ###SBATCH --mail-user=eclare@lanl.gov
-#SBATCH --qos=standby
+##SBATCH --qos=debug
+#SBATCH --qos=standard
+##SBATCH --qos=standby
 EOFB
 
 else if (${ICE_MACHINE} =~ fram*) then

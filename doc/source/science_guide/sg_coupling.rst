@@ -27,7 +27,7 @@ variables for each cell. These considerations are explained in more
 detail below.
 
 The fluxes and state variables passed between the sea ice model and the
-CESM flux coupler are listed in the `Icepack documentation  <https://cice-consortium-icepack.readthedocs.io/en/master/science_guide/index.html>`_.
+CESM flux coupler are listed in the `Icepack documentation  <https://cice-consortium-icepack.readthedocs.io/en/main/science_guide/index.html>`_.
 By convention,
 directional fluxes are positive downward. In CESM, the sea ice model may
 exchange coupling fluxes using a different grid than the computational
@@ -132,9 +132,8 @@ coefficient, :math:`\rho_w` is the density of seawater, and
 necessary if the top ocean model layers are not able to resolve the
 Ekman spiral in the boundary layer. If the top layer is sufficiently
 thin compared to the typical depth of the Ekman spiral, then
-:math:`\theta=0` is a good approximation. Here we assume that the top
-layer is thin enough.
+:math:`\theta=0` is a good approximation. 
 
-Please see the `Icepack documentation <https://cice-consortium-icepack.readthedocs.io/en/master/science_guide/index.html>`_ for additional information about 
+Please see the `Icepack documentation <https://cice-consortium-icepack.readthedocs.io/en/main/science_guide/index.html>`_ for additional information about 
 atmospheric and oceanic forcing and other data exchanged between the 
 flux coupler and the sea ice model.
