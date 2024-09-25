@@ -192,7 +192,9 @@ recommend that the user choose the local domains so that the global
 domain is evenly divided, if this is not possible then the furthest east
 and/or north blocks will contain nonphysical points (“padding”). These
 points are excluded from the computation domain and have little effect
-on model performance.
+on model performance.  ``nghost`` is a hardcoded parameter in **ice_blocks.F90**.
+While the halo code has been implemented to support arbitrary sized halos,
+``nghost`` is set to 1 and has not been formally tested on larger halos.
 
 .. _fig-grid:
 
@@ -1156,8 +1158,11 @@ io package.  The namelist variable ``history_format`` further refines the
 format approach or style for some io packages.
 
 Model output data can be written as instantaneous or average data as specified
-by the ``hist_avg`` namelist array and is customizable by stream.  The data is 
-written at the period(s) given by ``histfreq`` and
+by the ``hist_avg`` namelist array and is customizable by stream. Characters
+can be added to the ``history_filename`` to distinguish the streams. This can be changed
+by modifying ``hist_suffix`` to something other than "x".
+
+The data written at the period(s) given by ``histfreq`` and
 ``histfreq_n`` relative to a reference date specified by ``histfreq_base``.  
 The files are written to binary or netCDF files prepended by ``history_file``
 in **ice_in**. These settings for history files are set in the 
@@ -1197,7 +1202,7 @@ is a character string corresponding to ``histfreq`` or ‘x’ for none.
 files, no matter what the frequency is.) If there are no namelist flags
 with a given ``histfreq`` value, or if an element of ``histfreq_n`` is 0, then
 no file will be written at that frequency. The output period can be
-discerned from the filenames.  Each history stream will be either instantaneous
+discerned from the filenames or the ``hist_suffix`` can be used.  Each history stream will be either instantaneous
 or averaged as specified by the corresponding entry in the ``hist_avg`` namelist array, and the frequency
 will be relative to a reference date specified by the corresponding entry in ``histfreq_base``.
 More information about how the frequency is
