@@ -302,7 +302,7 @@
 /
 
 &domain_nml
-    nprocs = 4
+    nprocs            = -1
     nx_global         = 100
     ny_global         = 116
     block_size_x      = 25
@@ -471,6 +471,14 @@
 /
 
 &icefields_nml
+    f_tlon         = .true.
+    f_tlat         = .true.
+    f_ulon         = .true.
+    f_ulat         = .true.
+    f_nlon         = .true.
+    f_nlat         = .true.
+    f_elon         = .true.
+    f_elat         = .true.
     f_tmask        = .true.
     f_umask        = .false.
     f_nmask        = .false.
