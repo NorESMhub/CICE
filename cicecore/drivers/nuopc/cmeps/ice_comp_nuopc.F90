@@ -684,6 +684,8 @@ contains
       if(mastertask) write(nu_diag,*) trim(subname)//'WARNING: pio_typename from driver needs to be set for netcdf output to work'
     end if
 
+
+
 #else
 
     ! Read the cice namelist as part of the call to cice_init1
@@ -849,7 +851,7 @@ contains
     idate0    = start_ymd
     year_init = (idate0/10000)
     month_init= (idate0-year_init*10000)/100           ! integer month of basedate
-    day_init  = idate0-year_init*10000-month_init*100 
+    day_init  = idate0-year_init*10000-month_init*100
 
     !  - Set use_leap_years based on calendar (as some CICE calls use this instead of the calendar type)
     if (calendar_type == ice_calendar_gregorian) then
@@ -891,7 +893,7 @@ contains
     ! Prescribed ice initialization
     !-----------------------------------------------------------------
 
-    call ice_prescribed_init(clock, ice_mesh, rc)
+    call ice_prescribed_init(gcomp, clock, ice_mesh, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
 #ifdef CESMCOUPLED
@@ -1329,30 +1331,6 @@ contains
        call ESMF_LogWrite(subname//'setting alarms for ' // trim(name), ESMF_LOGMSG_INFO)
 
        !----------------
-       ! Stop alarm
-       !----------------
-       call NUOPC_CompAttributeGet(gcomp, name="stop_option", value=stop_option, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call NUOPC_CompAttributeGet(gcomp, name="stop_n", value=cvalue, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) stop_n
-
-       call NUOPC_CompAttributeGet(gcomp, name="stop_ymd", value=cvalue, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) stop_ymd
-
-       call alarmInit(mclock, stop_alarm, stop_option, &
-            opt_n   = stop_n,           &
-            opt_ymd = stop_ymd,         &
-            RefTime = mcurrTime,           &
-            alarmname = 'alarm_stop', rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call ESMF_AlarmSet(stop_alarm, clock=mclock, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       !----------------
        ! Restart alarm
        !----------------
        call NUOPC_CompAttributeGet(gcomp, name="restart_option", value=restart_option, rc=rc)
@@ -1374,6 +1352,30 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        call ESMF_AlarmSet(restart_alarm, clock=mclock, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       !----------------
+       ! Stop alarm
+       !----------------
+       call NUOPC_CompAttributeGet(gcomp, name="stop_option", value=stop_option, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call NUOPC_CompAttributeGet(gcomp, name="stop_n", value=cvalue, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) stop_n
+
+       call NUOPC_CompAttributeGet(gcomp, name="stop_ymd", value=cvalue, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) stop_ymd
+
+       call alarmInit(mclock, stop_alarm, stop_option, &
+            opt_n   = stop_n,           &
+            opt_ymd = stop_ymd,         &
+            RefTime = mcurrTime,           &
+            alarmname = 'alarm_stop', rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call ESMF_AlarmSet(stop_alarm, clock=mclock, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     end if
@@ -1535,8 +1537,14 @@ contains
        call ESMF_TimeGet(CurrTime, yy=year, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        orb_year = orb_iyear + (year - orb_iyear_align)
+       lprint = mastertask
     else
        orb_year = orb_iyear
+       if (first_time) then
+          lprint = mastertask
+       else
+          lprint = .false.
+       end if
     end if
 
     if (orb_year .ne. prev_orb_year) then
