@@ -49,6 +49,7 @@
                               mday, msec, npt
       use ice_domain_size, only: ncat
       use ice_read_write, only: ice_open
+
       character(len=char_len_long), intent(in), optional :: ice_ic
 
       ! local variables
@@ -66,7 +67,7 @@
          filename = trim(ice_ic)
       else
          if (my_task == master_task) then
-            open(nu_rst_pointer,file=pointer_file, status='old')
+            open(nu_rst_pointer,file=pointer_file)
             read(nu_rst_pointer,'(a)') filename0
             filename = trim(filename0)
             close(nu_rst_pointer)
@@ -750,7 +751,6 @@
 
       call ice_pio_check(pio_inq_varndims(File, vardesc, ndims), &
            subname// " ERROR: missing varndims "//trim(vname),file=__FILE__,line=__LINE__)
-      call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
 
       call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
 
