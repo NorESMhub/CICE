@@ -14,7 +14,7 @@
 
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task, ice_barrier
-      use ice_constants, only: c0, c1, c2, c3, c5, c12, p01, p2, p3, p5, p75, p166, &
+      use ice_constants, only: c0, c1, c2, c3, c5, c10, c12, p01, p2, p3, p5, p75, p166, &
           cm_to_m
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_nml, nu_diag, nml_filename, diag_type, &
@@ -239,7 +239,9 @@
         kitd,           ktherm,          conduct,     ksno,             &
         a_rapid_mode,   Rac_rapid_mode,  aspect_rapid_mode,             &
         dSdt_slow_mode, phi_c_slow_mode, phi_i_mushy,                   &
-        floediam,       hfrazilmin,      Tliquidus_max,   hi_min
+        floediam,       hfrazilmin,      Tliquidus_max,   hi_min,       &
+        tscale_pnd_drain
+        
 
       namelist /dynamics_nml/ &
         kdyn,           ndte,           revised_evp,    yield_curve,    &
@@ -500,7 +502,7 @@
       rfracmin  = 0.15_dbl_kind   ! minimum retained fraction of meltwater
       rfracmax  = 0.85_dbl_kind   ! maximum retained fraction of meltwater
       pndaspect = 0.8_dbl_kind    ! ratio of pond depth to area fraction
-      tscale_pnd_drain = 0.5
+      tscale_pnd_drain = c10      ! mushy macroscopic drainage timescale (days)
       snwredist = 'none'          ! type of snow redistribution
       snw_aging_table = 'test'    ! snow aging lookup table
       snw_filename    = 'unknown' ! snowtable filename
@@ -1080,7 +1082,7 @@
       call broadcast_scalar(rfracmin,             master_task)
       call broadcast_scalar(rfracmax,             master_task)
       call broadcast_scalar(pndaspect,            master_task)
-      call broadcast_scalar(tscale_pnd_drain,   master_task)
+      call broadcast_scalar(tscale_pnd_drain,     master_task)
       call broadcast_scalar(snwredist,            master_task)
       call broadcast_scalar(snw_aging_table,      master_task)
       call broadcast_scalar(snw_filename,         master_task)
@@ -1977,7 +1979,12 @@
          write(nu_diag,1030) '   grid_ocn_dynu  = ',trim(grid_ocn_dynu)
          write(nu_diag,1030) '   grid_ocn_dynv  = ',trim(grid_ocn_dynv)
          write(nu_diag,1030) ' kmt_type         = ',trim(kmt_type)
-         if (trim(grid_type) /= 'rectangular') then
+         if (trim(grid_type) == 'rectangular') then
+            write(nu_diag,1004) 'lon/lat refrect   = ',lonrefrect,latrefrect
+            write(nu_diag,1004) 'dx/dy rect (cm)   = ',dxrect,dyrect
+            write(nu_diag,1010) 'scale_dxdy        = ',scale_dxdy
+            write(nu_diag,1004) 'dx/dy scale       = ',dxscale,dyscale
+         else
             if (use_bathymetry) then
                tmpstr2 = ' : bathymetric input data is used'
             else
@@ -2774,7 +2781,8 @@
 
  1000    format (a20,1x,f13.6,1x,a) ! float
  1002    format (a20,5x,f9.2,1x,a)
- 1003    format (a20,1x,G13.4,1x,a)
+ 1003    format (a20,1x,g13.4,1x,a)
+ 1004    format (a20,1x,2g13.4,1x,a)
  1009    format (a20,1x,d13.6,1x,a)
  1010    format (a20,8x,l6,1x,a)  ! logical
  1011    format (a20,1x,l6)
@@ -3334,23 +3342,9 @@
          ! location of ice
          !---------------------------------------------------------
 
-         if (trim(ice_data_type) == 'box2001') then
+         icells = 0
 
-            ! place ice on left side of domain
-            icells = 0
-            do j = jlo, jhi
-            do i = ilo, ihi
-               if (tmask(i,j)) then
-                  if (ULON(i,j) < -50./rad_to_deg) then
-                     icells = icells + 1
-                     indxi(icells) = i
-                     indxj(icells) = j
-                  endif            ! ULON
-               endif               ! tmask
-            enddo                  ! i
-            enddo                  ! j
-
-         elseif (trim(ice_data_type) == 'boxslotcyl') then
+         if (trim(ice_data_type) == 'boxslotcyl') then
 
             ! Geometric configuration of the slotted cylinder
             diam     = p3 *dxrect*(nx_global-1)
@@ -3382,8 +3376,10 @@
             enddo
             enddo
 
-         elseif (trim(ice_data_type) == 'uniform') then
+         elseif (trim(ice_data_type) == 'uniform' .or. trim(ice_data_type) == 'box2001') then
             ! all cells not land mask are ice
+            ! box2001 used to have a check for west of 50W, this was changed, so now box2001 is 
+            ! the same as uniform.  keep box2001 option for backwards compatibility.
             icells = 0
             do j = jlo, jhi
             do i = ilo, ihi
