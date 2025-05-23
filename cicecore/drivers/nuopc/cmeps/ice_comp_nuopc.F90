@@ -55,6 +55,9 @@ module ice_comp_nuopc
   use ice_mesh_mod       , only : ice_mesh_init_tlon_tlat_area_hm, ice_mesh_create_scolumn
   use ice_prescribed_mod , only : ice_prescribed_init
   use ice_scam           , only : scol_valid, single_column
+#ifndef CESMCOUPLED
+  use shr_is_restart_fh_mod, only : init_is_restart_fh, is_restart_fh, is_restart_fh_type
+#endif
 
   implicit none
   private
@@ -96,6 +99,9 @@ module ice_comp_nuopc
   logical                      :: mastertask
   logical                      :: runtimelog = .false.
   logical                      :: restart_eor = .false. !End of run restart flag
+#ifndef CESMCOUPLED
+  type(is_restart_fh_type)     :: restartfh_info     ! For flexible restarts in UFS
+#endif
   integer                      :: start_ymd          ! Start date (YYYYMMDD)
   integer                      :: start_tod          ! start time of day (s)
   integer                      :: curr_ymd           ! Current date (YYYYMMDD)
@@ -834,6 +840,7 @@ contains
        myear = (idate/10000)                     ! integer year of basedate
        mmonth= (idate-myear*10000)/100           ! integer month of basedate
        mday  =  idate-myear*10000-mmonth*100     ! day of month of basedate
+       msec  = start_tod                         ! start from basedate
 
        if (my_task == master_task) then
           write(nu_diag,*) trim(subname),' curr_ymd = ',curr_ymd
@@ -849,7 +856,7 @@ contains
     idate0    = start_ymd
     year_init = (idate0/10000)
     month_init= (idate0-year_init*10000)/100           ! integer month of basedate
-    day_init  = idate0-year_init*10000-month_init*100 
+    day_init  = idate0-year_init*10000-month_init*100
 
     !  - Set use_leap_years based on calendar (as some CICE calls use this instead of the calendar type)
     if (calendar_type == ice_calendar_gregorian) then
@@ -891,7 +898,7 @@ contains
     ! Prescribed ice initialization
     !-----------------------------------------------------------------
 
-    call ice_prescribed_init(clock, ice_mesh, rc)
+    call ice_prescribed_init(gcomp, clock, ice_mesh, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
 #ifdef CESMCOUPLED
@@ -1023,6 +1030,9 @@ contains
     character(char_len_long)   :: restart_date
     character(char_len_long)   :: restart_filename
     logical                    :: isPresent, isSet
+#ifndef CESMCOUPLED
+    logical                    :: write_restartfh
+#endif
     character(len=*),parameter :: subname=trim(modName)//':(ModelAdvance) '
     character(char_len_long)   :: msgString
     !--------------------------------
@@ -1174,6 +1184,11 @@ contains
        endif
     endif
 
+#ifndef CESMCOUPLED
+    call is_restart_fh(clock, restartfh_info, write_restartfh)
+    if (write_restartfh) force_restart_now = .true.
+#endif
+
     !--------------------------------
     ! Unpack import state
     !--------------------------------
@@ -1291,6 +1306,9 @@ contains
     type(ESMF_ALARM)         :: stop_alarm
     character(len=128)       :: name
     integer                  :: alarmcount
+#ifndef CESMCOUPLED
+    integer                  :: dtime
+#endif
     character(len=*),parameter :: subname=trim(modName)//':(ModelSetRunClock) '
     !--------------------------------
 
@@ -1376,6 +1394,11 @@ contains
        call ESMF_AlarmSet(restart_alarm, clock=mclock, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+#ifndef CESMCOUPLED
+       call ESMF_TimeIntervalGet( dtimestep, s=dtime, rc=rc )
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call init_is_restart_fh(mcurrTime, dtime, my_task == master_task, restartfh_info)
+#endif
     end if
 
     !--------------------------------
@@ -1535,8 +1558,14 @@ contains
        call ESMF_TimeGet(CurrTime, yy=year, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        orb_year = orb_iyear + (year - orb_iyear_align)
+       lprint = mastertask
     else
        orb_year = orb_iyear
+       if (first_time) then
+          lprint = mastertask
+       else
+          lprint = .false.
+       end if
     end if
 
     if (orb_year .ne. prev_orb_year) then

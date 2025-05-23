@@ -5202,7 +5202,6 @@
       use ice_domain, only: nblocks, blocks_ice
       use ice_blocks, only: block, get_block, nx_block, ny_block, nghost
       use ice_flux, only: uocn, vocn
-      use ice_grid, only: uvm
 
       ! local parameters
 
@@ -5234,9 +5233,6 @@
                             / real(ny_global,kind=dbl_kind) - p1
          vocn(i,j,iblk) = -p2*real(iglob(i), kind=dbl_kind) &
                             / real(nx_global,kind=dbl_kind) + p1
-
-         uocn(i,j,iblk) = uocn(i,j,iblk) * uvm(i,j,iblk)
-         vocn(i,j,iblk) = vocn(i,j,iblk) * uvm(i,j,iblk)
 
          enddo
          enddo
@@ -5396,9 +5392,10 @@
       if (wave_spec) then
       ! get hardwired frequency bin info and a dummy wave spectrum profile
       ! the latter is used if wave_spec_type == profile
-         call icepack_init_wave(nfreq,                 &
-                                wave_spectrum_profile, &
-                                wavefreq, dwavefreq)
+         call icepack_init_wave(nfreq     = nfreq,    &
+                                wave_spectrum_profile = wave_spectrum_profile, &
+                                wavefreq  = wavefreq, &
+                                dwavefreq = dwavefreq)
 
          ! read more realistic data from a file
          if ((trim(wave_spec_type) == 'constant').OR.(trim(wave_spec_type) == 'random')) then
@@ -5472,8 +5469,6 @@
       logical (kind=log_kind) :: wave_spec
       character(len=*), parameter :: subname = '(wave_spec_data)'
 
-
-
       debug_n_d = .false.  !usually false
 
       call icepack_query_parameters(secday_out=secday)
@@ -5481,10 +5476,10 @@
       if (icepack_warnings_aborted()) call abort_ice(error_message=subname, &
          file=__FILE__, line=__LINE__)
 
-         call icepack_init_wave(nfreq,                 &
-                                wave_spectrum_profile, &
-                                wavefreq, dwavefreq)
-
+         call icepack_init_wave(nfreq     = nfreq,    &
+                                wave_spectrum_profile = wave_spectrum_profile, &
+                                wavefreq  = wavefreq, &
+                                dwavefreq = dwavefreq)
 
       !spec_file = trim(ocn_data_dir)//'/'//trim(wave_spec_file)
       spec_file = trim(wave_spec_file)

@@ -49,6 +49,7 @@
                               mday, msec, npt
       use ice_domain_size, only: ncat
       use ice_read_write, only: ice_open
+
       character(len=char_len_long), intent(in), optional :: ice_ic
 
       ! local variables
@@ -66,7 +67,7 @@
          filename = trim(ice_ic)
       else
          if (my_task == master_task) then
-            open(nu_rst_pointer,file=pointer_file, status='old')
+            open(nu_rst_pointer,file=pointer_file,status='old')
             read(nu_rst_pointer,'(a)') filename0
             filename = trim(filename0)
             close(nu_rst_pointer)
@@ -80,13 +81,8 @@
       end if
 
       File%fh=-1
-! tcraig, including fformat here causes some problems when restart_format=hdf5
-!         and reading non hdf5 files with spack built PIO.  Excluding the fformat
-!         argument here defaults the PIO format to cdf1 which then reads
-!         any netcdf format file fine.
       call ice_pio_init(mode='read', filename=trim(filename), File=File, &
-!          fformat=trim(restart_format), rearr=trim(restart_rearranger), &
-                                         rearr=trim(restart_rearranger), &
+           fformat=trim(restart_format), rearr=trim(restart_rearranger), &
            iotasks=restart_iotasks, root=restart_root, stride=restart_stride, &
            debug=first_call)
 
@@ -170,7 +166,7 @@
 
       logical (kind=log_kind) :: &
          tr_iage, tr_FY, tr_lvl, tr_iso, tr_aero, &
-         tr_pond_topo, tr_pond_lvl, tr_brine, tr_snow, &
+         tr_pond_topo, tr_pond_lvl, tr_pond_sealvl, tr_brine, tr_snow, &
          tr_bgc_N, tr_bgc_C, tr_bgc_Nit, &
          tr_bgc_Sil, tr_bgc_DMS, &
          tr_bgc_chl, tr_bgc_Am,  &
@@ -201,6 +197,7 @@
          tr_iage_out=tr_iage, tr_FY_out=tr_FY, tr_lvl_out=tr_lvl, &
          tr_iso_out=tr_iso, tr_aero_out=tr_aero, &
          tr_pond_topo_out=tr_pond_topo, tr_pond_lvl_out=tr_pond_lvl, &
+         tr_pond_sealvl_out=tr_pond_sealvl, &
          tr_snow_out=tr_snow, tr_brine_out=tr_brine, &
          tr_bgc_N_out=tr_bgc_N, tr_bgc_C_out=tr_bgc_C, tr_bgc_Nit_out=tr_bgc_Nit, &
          tr_bgc_Sil_out=tr_bgc_Sil, tr_bgc_DMS_out=tr_bgc_DMS, &
@@ -347,7 +344,7 @@
          call define_rest_field(File,'a12_4',dims)
       endif
 
-      if (tr_pond_lvl) then
+      if (tr_pond_lvl .or. tr_pond_sealvl) then
          call define_rest_field(File,'fsnow',dims)
       endif
 
@@ -439,7 +436,7 @@
          call define_rest_field(File,'ipnd',dims)
       end if
 
-      if (tr_pond_lvl) then
+      if (tr_pond_lvl .or. tr_pond_sealvl) then
          call define_rest_field(File,'apnd',dims)
          call define_rest_field(File,'hpnd',dims)
          call define_rest_field(File,'ipnd',dims)
@@ -754,6 +751,7 @@
 
       call ice_pio_check(pio_inq_varndims(File, vardesc, ndims), &
            subname// " ERROR: missing varndims "//trim(vname),file=__FILE__,line=__LINE__)
+
       call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
 
       if (ndim3 == ncat .and. ndims == 3) then
@@ -782,8 +780,6 @@
 
       call ice_pio_check(status, &
            subname//" ERROR: reading var "//trim(vname),file=__FILE__,line=__LINE__)
-
-      call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
 
       if (diag) then
          if (ndim3 > 1) then
@@ -912,6 +908,7 @@
       call PIO_freeDecomp(File,iodesc2d)
       call PIO_freeDecomp(File,iodesc3d_ncat)
       call pio_closefile(File)
+      call ice_pio_finalize()
 
       if (my_task == master_task) then
          write(nu_diag,'(a,i8,4x,i4.4,a,i2.2,a,i2.2,a,i5.5)') &

@@ -14,8 +14,8 @@
 
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task, ice_barrier
-      use ice_constants, only: c0, c1, c2, c3, c5, c12, p01, p2, p3, p5, p75, p166, &
-          cm_to_m
+      use ice_constants, only: c0, c1, c2, c3, c5, c10, c12, &
+          p001, p01, p2, p3, p5, p75, p166, cm_to_m
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_nml, nu_diag, nml_filename, diag_type, &
           ice_stdout, get_fileunit, release_fileunit, bfbflag, flush_fileunit, &
@@ -26,7 +26,7 @@
       use icepack_intfc, only: icepack_warnings_flush, icepack_warnings_aborted
       use icepack_intfc, only: icepack_aggregate
       use icepack_intfc, only: icepack_init_trcr
-      use icepack_intfc, only: icepack_init_parameters
+      use icepack_intfc, only: icepack_init_parameters, icepack_write_parameters
       use icepack_intfc, only: icepack_init_tracer_flags
       use icepack_intfc, only: icepack_init_tracer_sizes
       use icepack_intfc, only: icepack_query_tracer_flags
@@ -63,7 +63,7 @@
           diag_file, print_global, print_points, latpnt, lonpnt, &
           debug_model, debug_model_step, debug_model_task, &
           debug_model_i, debug_model_j, debug_model_iblk
-      use ice_domain, only: close_boundaries, orca_halogrid
+      use ice_domain, only: close_boundaries
       use ice_domain_size, only: &
           ncat, nilyr, nslyr, nblyr, nfsd, nfreq, &
           n_iso, n_aero, n_zaero, n_algae, &
@@ -78,8 +78,8 @@
       use ice_arrays_column, only: oceanmixed_ice
       use ice_restart_column, only: &
           restart_age, restart_FY, restart_lvl, &
-          restart_pond_lvl, restart_pond_topo, restart_aero, &
-          restart_fsd, restart_iso, restart_snow
+          restart_pond_lvl, restart_pond_topo, restart_pond_sealvl, &
+          restart_aero, restart_fsd, restart_iso, restart_snow
       use ice_restart_shared, only: &
           restart, restart_ext, restart_coszen, use_restart_time, &
           runtype, restart_file, restart_dir, runid, pointer_file, &
@@ -109,7 +109,7 @@
           grid_file, gridcpl_file, kmt_file, &
           bathymetry_file, use_bathymetry, &
           bathymetry_format, kmt_type, &
-          grid_type, grid_format, &
+          grid_type, grid_format, grid_outfile, &
           grid_ice, grid_ice_thrm, grid_ice_dynu, grid_ice_dynv, &
           grid_ocn, grid_ocn_thrm, grid_ocn_dynu, grid_ocn_dynv, &
           grid_atm, grid_atm_thrm, grid_atm_dynu, grid_atm_dynv, &
@@ -123,7 +123,7 @@
           e_yieldcurve, e_plasticpot, coriolis, &
           ssh_stress, kridge, brlx, arlx,       &
           deltaminEVP, deltaminVP, capping,     &
-          elasticDamp
+          elasticDamp, dyn_area_min, dyn_mass_min
       use ice_dyn_vp, only: &
           maxits_nonlin, precond, dim_fgmres, dim_pgmres, maxits_fgmres, &
           maxits_pgmres, monitor_nonlin, monitor_fgmres, &
@@ -157,25 +157,26 @@
         phi_c_slow_mode, phi_i_mushy, kalg, atmiter_conv, Pstar, Cstar, &
         sw_frac, sw_dtemp, floediam, hfrazilmin, iceruf, iceruf_ocn, &
         rsnw_fall, rsnw_tmax, rhosnew, rhosmin, rhosmax, Tliquidus_max, &
-        windmin, drhosdwind, snwlvlfac
+        windmin, drhosdwind, snwlvlfac, tscale_pnd_drain
 
       integer (kind=int_kind) :: ktherm, kstrength, krdg_partic, krdg_redist, natmiter, &
         kitd, kcatbound, ktransport
 
       character (len=char_len) :: shortwave, albedo_type, conduct, fbot_xfer_type, &
         tfrz_option, saltflux_option, frzpnd, atmbndy, wave_spec_type, snwredist, snw_aging_table, &
-        capping_method, snw_ssp_table
+        congel_freeze, capping_method, snw_ssp_table
 
       logical (kind=log_kind) :: calc_Tsfc, formdrag, highfreq, calc_strair, wave_spec, &
         sw_redist, calc_dragio, use_smliq_pnd, snwgrain
 
       logical (kind=log_kind) :: tr_iage, tr_FY, tr_lvl, tr_pond
       logical (kind=log_kind) :: tr_iso, tr_aero, tr_fsd, tr_snow
-      logical (kind=log_kind) :: tr_pond_lvl, tr_pond_topo
+      logical (kind=log_kind) :: tr_pond_lvl, tr_pond_topo, tr_pond_sealvl
       integer (kind=int_kind) :: numin, numax  ! unit number limits
       logical (kind=log_kind) :: lcdf64  ! deprecated, backwards compatibility
+      logical (kind=log_kind) :: orca_halogrid !deprecated
 
-      integer (kind=int_kind) :: rplvl, rptopo
+      integer (kind=int_kind) :: rplvl, rptopo, rpsealvl
       real (kind=dbl_kind)    :: Cf, ksno, puny, ice_ref_salinity, Tocnfrz
 
       character (len=char_len) :: abort_list
@@ -216,7 +217,7 @@
         ncat,           nilyr,           nslyr,         nblyr,          &
         kcatbound,      gridcpl_file,    dxrect,        dyrect,         &
         dxscale,        dyscale,         lonrefrect,    latrefrect,     &
-        scale_dxdy,                                                     &
+        scale_dxdy,     grid_outfile,                                   &
         close_boundaries, orca_halogrid, grid_ice,      kmt_type,       &
         grid_atm,       grid_ocn
 
@@ -225,19 +226,22 @@
         tr_FY, restart_FY,                                              &
         tr_lvl, restart_lvl,                                            &
         tr_pond_lvl, restart_pond_lvl,                                  &
+        tr_pond_sealvl, restart_pond_sealvl,                            &
         tr_pond_topo, restart_pond_topo,                                &
         tr_snow, restart_snow,                                          &
         tr_iso, restart_iso,                                            &
         tr_aero, restart_aero,                                          &
         tr_fsd, restart_fsd,                                            &
-        n_iso, n_aero, n_zaero, n_algae,                                &
+        n_iso, n_aero, n_zaero, n_algae,                          &
         n_doc, n_dic, n_don, n_fed, n_fep
 
       namelist /thermo_nml/ &
         kitd,           ktherm,          conduct,     ksno,             &
         a_rapid_mode,   Rac_rapid_mode,  aspect_rapid_mode,             &
         dSdt_slow_mode, phi_c_slow_mode, phi_i_mushy,                   &
-        floediam,       hfrazilmin,      Tliquidus_max,   hi_min
+        floediam,       hfrazilmin,      Tliquidus_max,   hi_min,       &
+        tscale_pnd_drain
+        
 
       namelist /dynamics_nml/ &
         kdyn,           ndte,           revised_evp,    yield_curve,    &
@@ -254,7 +258,8 @@
         ortho_type,     seabed_stress,  seabed_stress_method,           &
         k1, k2,         alphab,         threshold_hw,                   &
         deltaminEVP,    deltaminVP,     capping_method,                 &
-        Cf,             Pstar,          Cstar,          Ktens
+        Cf,             Pstar,          Cstar,          Ktens,          &
+        dyn_area_min,   dyn_mass_min
 
       namelist /shortwave_nml/ &
         shortwave,      albedo_type,     snw_ssp_table,                 &
@@ -265,6 +270,7 @@
 
       namelist /ponds_nml/ &
         hs0,            dpscale,         frzpnd,                        &
+        tscale_pnd_drain, & 
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
         hp1
 
@@ -280,7 +286,7 @@
         highfreq,       natmiter,        atmiter_conv,  calc_dragio,    &
         ustar_min,      emissivity,      iceruf,        iceruf_ocn,     &
         fbot_xfer_type, update_ocn_f,    l_mpond_fresh, tfrz_option,    &
-        saltflux_option,ice_ref_salinity,cpl_frazil,                    &
+        saltflux_option,ice_ref_salinity,cpl_frazil,    congel_freeze,  &
         oceanmixed_ice, restore_ice,     restore_ocn,   trestore,       &
         precip_units,   default_season,  wave_spec_type,nfreq,          &
         atm_data_type,  ocn_data_type,   bgc_data_type, fe_data_type,   &
@@ -331,6 +337,7 @@
       bfbflag = 'off'        ! off = optimized
       diag_type = 'stdout'
       diag_file = 'ice_diag.d'
+      histfreq(:) = 'x'
       histfreq(1) = '1'      ! output frequency option for different streams
       histfreq(2) = 'h'      ! output frequency option for different streams
       histfreq(3) = 'd'      ! output frequency option for different streams
@@ -382,7 +389,8 @@
       grid_atm     = 'A'          ! underlying atm forcing/coupling grid
       grid_ocn     = 'A'          ! underlying atm forcing/coupling grid
       gridcpl_file = 'unknown_gridcpl_file'
-      orca_halogrid = .false.     ! orca haloed grid
+      grid_outfile = .false.      ! write out one-time grid history file
+      orca_halogrid = .false.     ! orca haloed grid - deprecated
       bathymetry_file   = 'unknown_bathymetry_file'
       bathymetry_format = 'default'
       use_bathymetry    = .false.
@@ -410,6 +418,8 @@
       kstrength = 1           ! 1 = Rothrock 75 strength, 0 = Hibler 79
       Pstar = 2.75e4_dbl_kind ! constant in Hibler strength formula (kstrength = 0)
       Cstar = 20._dbl_kind    ! constant in Hibler strength formula (kstrength = 0)
+      dyn_area_min = p001     ! minimum ice area concentration to activate dynamics
+      dyn_mass_min = p01      ! minimum ice mass to activate dynamics (kg/m^2)
       krdg_partic = 1         ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1         ! 1 = new redistribution, 0 = Hibler 80
       mu_rdg = 3              ! e-folding scale of ridged ice, krdg_partic=1 (m^0.5)
@@ -497,6 +507,7 @@
       rfracmin  = 0.15_dbl_kind   ! minimum retained fraction of meltwater
       rfracmax  = 0.85_dbl_kind   ! maximum retained fraction of meltwater
       pndaspect = 0.8_dbl_kind    ! ratio of pond depth to area fraction
+      tscale_pnd_drain = c10      ! mushy macroscopic drainage timescale (days)
       snwredist = 'none'          ! type of snow redistribution
       snw_aging_table = 'test'    ! snow aging lookup table
       snw_filename    = 'unknown' ! snowtable filename
@@ -537,6 +548,7 @@
       atmiter_conv    = c0        ! ustar convergence criteria
       precip_units    = 'mks'     ! 'mm_per_month' or
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
+      congel_freeze   = 'two-step'! congelation freezing method
       tfrz_option     = 'mushy'   ! freezing temp formulation
       saltflux_option = 'constant'    ! saltflux calculation
       ice_ref_salinity = 4.0_dbl_kind ! Ice reference salinity for coupling
@@ -580,6 +592,8 @@
       restart_lvl  = .false. ! level ice restart
       tr_pond_lvl  = .false. ! level-ice melt ponds
       restart_pond_lvl  = .false. ! melt ponds restart
+      tr_pond_sealvl  = .false. ! Sea level melt ponds
+      restart_pond_sealvl  = .false. ! Sea level melt ponds restart
       tr_pond_topo = .false. ! explicit melt ponds (topographic)
       restart_pond_topo = .false. ! melt ponds restart
       tr_snow      = .false. ! advanced snow physics
@@ -958,6 +972,7 @@
       call broadcast_scalar(cpl_bgc,              master_task)
       call broadcast_scalar(incond_dir,           master_task)
       call broadcast_scalar(incond_file,          master_task)
+      call broadcast_scalar(version_name,         master_task)
       call broadcast_scalar(dump_last,            master_task)
       call broadcast_scalar(restart_file,         master_task)
       call broadcast_scalar(restart,              master_task)
@@ -990,6 +1005,7 @@
       call broadcast_scalar(grid_atm,             master_task)
       call broadcast_scalar(grid_file,            master_task)
       call broadcast_scalar(gridcpl_file,         master_task)
+      call broadcast_scalar(grid_outfile,         master_task)
       call broadcast_scalar(orca_halogrid,        master_task)
       call broadcast_scalar(bathymetry_file,      master_task)
       call broadcast_scalar(bathymetry_format,    master_task)
@@ -1010,6 +1026,8 @@
       call broadcast_scalar(kstrength,            master_task)
       call broadcast_scalar(Pstar,                master_task)
       call broadcast_scalar(Cstar,                master_task)
+      call broadcast_scalar(dyn_area_min,         master_task)
+      call broadcast_scalar(dyn_mass_min,         master_task)
       call broadcast_scalar(krdg_partic,          master_task)
       call broadcast_scalar(krdg_redist,          master_task)
       call broadcast_scalar(mu_rdg,               master_task)
@@ -1073,6 +1091,7 @@
       call broadcast_scalar(rfracmin,             master_task)
       call broadcast_scalar(rfracmax,             master_task)
       call broadcast_scalar(pndaspect,            master_task)
+      call broadcast_scalar(tscale_pnd_drain,     master_task)
       call broadcast_scalar(snwredist,            master_task)
       call broadcast_scalar(snw_aging_table,      master_task)
       call broadcast_scalar(snw_filename,         master_task)
@@ -1127,6 +1146,7 @@
       call broadcast_scalar(wave_spec_type,       master_task)
       call broadcast_scalar(wave_spec_file,       master_task)
       call broadcast_scalar(nfreq,                master_task)
+      call broadcast_scalar(congel_freeze,        master_task)
       call broadcast_scalar(tfrz_option,          master_task)
       call broadcast_scalar(saltflux_option,      master_task)
       call broadcast_scalar(ice_ref_salinity,     master_task)
@@ -1159,6 +1179,8 @@
       call broadcast_scalar(restart_lvl,          master_task)
       call broadcast_scalar(tr_pond_lvl,          master_task)
       call broadcast_scalar(restart_pond_lvl,     master_task)
+      call broadcast_scalar(tr_pond_sealvl,       master_task)
+      call broadcast_scalar(restart_pond_sealvl,  master_task)
       call broadcast_scalar(tr_pond_topo,         master_task)
       call broadcast_scalar(restart_pond_topo,    master_task)
       call broadcast_scalar(tr_snow,              master_task)
@@ -1466,13 +1488,15 @@
 
       rplvl  = 0
       rptopo = 0
+      rpsealvl = 0
       if (tr_pond_lvl ) rplvl  = 1
+      if (tr_pond_sealvl ) rpsealvl  = 1
       if (tr_pond_topo) rptopo = 1
 
       tr_pond = .false. ! explicit melt ponds
-      if (rplvl + rptopo > 0) tr_pond = .true.
+      if (rplvl + rptopo + rpsealvl > 0) tr_pond = .true.
 
-      if (rplvl + rptopo > 1) then
+      if (rplvl + rptopo + rpsealvl > 1) then
          if (my_task == master_task) then
             write(nu_diag,*) subname//' ERROR: Must use only one melt pond scheme'
          endif
@@ -1827,6 +1851,20 @@
          endif
       endif
 
+      if (orca_halogrid) then
+         if (my_task == master_task) then
+            write(nu_diag,*) subname//' ERROR: orca_halogrid has been deprecated'
+         endif
+         abort_list = trim(abort_list)//":63"
+      endif
+
+      if (trim(grid_type) == 'cpom_grid') then
+         if (my_task == master_task) then
+            write(nu_diag,*) subname//" ERROR: grid_type = 'cpom_grid' has been deprecated"
+         endif
+         abort_list = trim(abort_list)//":64"
+      endif
+
       ice_IOUnitsMinUnit = numin
       ice_IOUnitsMaxUnit = numax
 
@@ -1950,7 +1988,12 @@
          write(nu_diag,1030) '   grid_ocn_dynu  = ',trim(grid_ocn_dynu)
          write(nu_diag,1030) '   grid_ocn_dynv  = ',trim(grid_ocn_dynv)
          write(nu_diag,1030) ' kmt_type         = ',trim(kmt_type)
-         if (trim(grid_type) /= 'rectangular') then
+         if (trim(grid_type) == 'rectangular') then
+            write(nu_diag,1004) 'lon/lat refrect   = ',lonrefrect,latrefrect
+            write(nu_diag,1004) 'dx/dy rect (cm)   = ',dxrect,dyrect
+            write(nu_diag,1010) 'scale_dxdy        = ',scale_dxdy
+            write(nu_diag,1004) 'dx/dy scale       = ',dxscale,dyscale
+         else
             if (use_bathymetry) then
                tmpstr2 = ' : bathymetric input data is used'
             else
@@ -2007,6 +2050,8 @@
             tmpstr2 = ' : unknown value'
          endif
          write(nu_diag,1020) ' kdyn             = ', kdyn,trim(tmpstr2)
+         write(nu_diag,1003) ' dyn_area_min     = ', dyn_area_min,' : min ice area concentration to activate dynamics'
+         write(nu_diag,1003) ' dyn_mass_min     = ', dyn_mass_min,' : min ice mass to activate dynamics (kg/m2)'
          if (kdyn >= 1) then
             if (kdyn == 1 .or. kdyn == 2) then
                if (revised_evp) then
@@ -2309,6 +2354,7 @@
          if (trim(tfrz_option) == 'constant') then
             write(nu_diag,1002) ' Tocnfrz          = ', Tocnfrz
          endif
+         write(nu_diag,1030) ' congel_freeze    = ', trim(congel_freeze)
          if (update_ocn_f) then
             tmpstr2 = ' : frazil water/salt fluxes included in ocean fluxes'
          else
@@ -2395,6 +2441,8 @@
          elseif (tr_pond_topo) then
             write(nu_diag,1010) ' tr_pond_topo     = ', tr_pond_topo,' : topo pond formulation'
             write(nu_diag,1002) ' hp1              = ', hp1,' : critical ice lid thickness for topo ponds'
+         elseif (tr_pond_sealvl) then
+            write(nu_diag,1010) ' tr_pond_sealvl   = ', tr_pond_sealvl,' : sealvl pond formulation'
          elseif (trim(shortwave) == 'ccsm3') then
             write(nu_diag,*) 'Pond effects on radiation are treated implicitly in the ccsm3 shortwave scheme'
          else
@@ -2491,6 +2539,7 @@
          if (tr_fsd)       write(nu_diag,1010) ' tr_fsd           = ', tr_fsd,' : floe size distribution'
          if (tr_lvl)       write(nu_diag,1010) ' tr_lvl           = ', tr_lvl,' : ridging related tracers'
          if (tr_pond_lvl)  write(nu_diag,1010) ' tr_pond_lvl      = ', tr_pond_lvl,' : level-ice pond formulation'
+         if (tr_pond_sealvl) write(nu_diag,1010) ' tr_pond_sealvl   = ', tr_pond_sealvl,' : sea level pond formulation'
          if (tr_pond_topo) write(nu_diag,1010) ' tr_pond_topo     = ', tr_pond_topo,' : topo pond formulation'
          if (tr_snow)      write(nu_diag,1010) ' tr_snow          = ', tr_snow,' : advanced snow physics'
          if (tr_iage)      write(nu_diag,1010) ' tr_iage          = ', tr_iage,' : chronological ice age'
@@ -2506,6 +2555,7 @@
          write(nu_diag,*) '===================================== '
          if (trim(runid) /= 'unknown') &
          write(nu_diag,1031) ' runid            = ', trim(runid)
+         write(nu_diag,1031) ' version_name     = ', trim(version_name)
          write(nu_diag,1031) ' runtype          = ', trim(runtype)
          write(nu_diag,1021) ' year_init        = ', year_init
          write(nu_diag,1021) ' month_init       = ', month_init
@@ -2528,11 +2578,12 @@
          write(nu_diag,1031) ' bfbflag          = ', trim(bfbflag)
          write(nu_diag,1021) ' numin            = ', numin
          write(nu_diag,1021) ' numax            = ', numax
-         write(nu_diag,1033) ' histfreq         = ', histfreq(:)
-         write(nu_diag,1023) ' histfreq_n       = ', histfreq_n(:)
-         write(nu_diag,1033) ' histfreq_base    = ', histfreq_base(:)
-         write(nu_diag,1013) ' hist_avg         = ', hist_avg(:)
-         write(nu_diag,1033) ' hist_suffix      = ', hist_suffix(:)
+         write(nu_diag,1011) ' grid_outfile     = ', grid_outfile
+         write(nu_diag,1033) ' histfreq         = ', histfreq(1:max_nstrm-1)
+         write(nu_diag,1023) ' histfreq_n       = ', histfreq_n(1:max_nstrm-1)
+         write(nu_diag,1033) ' histfreq_base    = ', histfreq_base(1:max_nstrm-1)
+         write(nu_diag,1013) ' hist_avg         = ', hist_avg(1:max_nstrm-1)
+         write(nu_diag,1033) ' hist_suffix      = ', hist_suffix(1:max_nstrm-1)
          write(nu_diag,1031) ' history_dir      = ', trim(history_dir)
          write(nu_diag,1031) ' history_file     = ', trim(history_file)
          write(nu_diag,1021) ' history_precision= ', history_precision
@@ -2548,9 +2599,9 @@
             write(nu_diag,1039) ' Initial condition will be written in ', &
                                trim(incond_dir)
          endif
-         write(nu_diag,1033) ' dumpfreq         = ', dumpfreq(:)
-         write(nu_diag,1023) ' dumpfreq_n       = ', dumpfreq_n(:)
-         write(nu_diag,1033) ' dumpfreq_base    = ', dumpfreq_base(:)
+         write(nu_diag,1033) ' dumpfreq         = ', dumpfreq(1:max_nstrm-1)
+         write(nu_diag,1023) ' dumpfreq_n       = ', dumpfreq_n(1:max_nstrm-1)
+         write(nu_diag,1033) ' dumpfreq_base    = ', dumpfreq_base(1:max_nstrm-1)
          write(nu_diag,1011) ' dump_last        = ', dump_last
          write(nu_diag,1011) ' restart          = ', restart
          write(nu_diag,1031) ' restart_dir      = ', trim(restart_dir)
@@ -2576,7 +2627,6 @@
             if (trim(kmt_type) == 'file') &
                write(nu_diag,1031) ' kmt_file         = ', trim(kmt_file)
          endif
-         write(nu_diag,1011) ' orca_halogrid    = ', orca_halogrid
 
          write(nu_diag,1011) ' conserv_check    = ', conserv_check
 
@@ -2632,6 +2682,7 @@
          write(nu_diag,1011) ' restart_FY       = ', restart_FY
          write(nu_diag,1011) ' restart_lvl      = ', restart_lvl
          write(nu_diag,1011) ' restart_pond_lvl = ', restart_pond_lvl
+         write(nu_diag,1011) ' restart_pond_sealvl = ', restart_pond_sealvl
          write(nu_diag,1011) ' restart_pond_topo= ', restart_pond_topo
          write(nu_diag,1011) ' restart_snow     = ', restart_snow
          write(nu_diag,1011) ' restart_iso      = ', restart_iso
@@ -2719,7 +2770,7 @@
          aspect_rapid_mode_in=aspect_rapid_mode, dSdt_slow_mode_in=dSdt_slow_mode, &
          phi_c_slow_mode_in=phi_c_slow_mode, phi_i_mushy_in=phi_i_mushy, conserv_check_in=conserv_check, &
          wave_spec_type_in = wave_spec_type, wave_spec_in=wave_spec, nfreq_in=nfreq, &
-         update_ocn_f_in=update_ocn_f, cpl_frazil_in=cpl_frazil, &
+         update_ocn_f_in=update_ocn_f, cpl_frazil_in=cpl_frazil, congel_freeze_in=congel_freeze, &
          tfrz_option_in=tfrz_option, kalg_in=kalg, fbot_xfer_type_in=fbot_xfer_type, &
          saltflux_option_in=saltflux_option, ice_ref_salinity_in=ice_ref_salinity, &
          Pstar_in=Pstar, Cstar_in=Cstar, iceruf_in=iceruf, iceruf_ocn_in=iceruf_ocn, calc_dragio_in=calc_dragio, &
@@ -2727,11 +2778,12 @@
          rsnw_fall_in=rsnw_fall, rsnw_tmax_in=rsnw_tmax, rhosnew_in=rhosnew, &
          snwlvlfac_in=snwlvlfac, rhosmin_in=rhosmin, rhosmax_in=rhosmax, &
          snwredist_in=snwredist, snwgrain_in=snwgrain, snw_aging_table_in=trim(snw_aging_table), &
-         sw_redist_in=sw_redist, sw_frac_in=sw_frac, sw_dtemp_in=sw_dtemp)
+         sw_redist_in=sw_redist, sw_frac_in=sw_frac, sw_dtemp_in=sw_dtemp, &
+         tscale_pnd_drain_in=tscale_pnd_drain)
       call icepack_init_tracer_flags(tr_iage_in=tr_iage, tr_FY_in=tr_FY, &
          tr_lvl_in=tr_lvl, tr_iso_in=tr_iso, tr_aero_in=tr_aero, &
          tr_fsd_in=tr_fsd, tr_snow_in=tr_snow, tr_pond_in=tr_pond, &
-         tr_pond_lvl_in=tr_pond_lvl, tr_pond_topo_in=tr_pond_topo)
+         tr_pond_lvl_in=tr_pond_lvl, tr_pond_sealvl_in=tr_pond_sealvl, tr_pond_topo_in=tr_pond_topo)
       call icepack_init_tracer_sizes(ncat_in=ncat, nilyr_in=nilyr, nslyr_in=nslyr, nblyr_in=nblyr, &
          nfsd_in=nfsd, n_algae_in=n_algae, n_iso_in=n_iso, n_aero_in=n_aero, &
          n_DOC_in=n_DOC, n_DON_in=n_DON, &
@@ -2742,7 +2794,8 @@
 
  1000    format (a20,1x,f13.6,1x,a) ! float
  1002    format (a20,5x,f9.2,1x,a)
- 1003    format (a20,1x,G13.4,1x,a)
+ 1003    format (a20,1x,g13.4,1x,a)
+ 1004    format (a20,1x,2g13.4,1x,a)
  1009    format (a20,1x,d13.6,1x,a)
  1010    format (a20,8x,l6,1x,a)  ! logical
  1011    format (a20,1x,l6)
@@ -2792,7 +2845,7 @@
 
       integer (kind=int_kind) :: ntrcr
       logical (kind=log_kind) :: tr_iage, tr_FY, tr_lvl, tr_iso, tr_aero
-      logical (kind=log_kind) :: tr_pond_lvl, tr_pond_topo
+      logical (kind=log_kind) :: tr_pond_lvl, tr_pond_topo, tr_pond_sealvl
       logical (kind=log_kind) :: tr_snow, tr_fsd
       integer (kind=int_kind) :: nt_Tsfc, nt_sice, nt_qice, nt_qsno, nt_iage, nt_FY
       integer (kind=int_kind) :: nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd
@@ -2810,6 +2863,7 @@
       call icepack_query_tracer_flags(tr_iage_out=tr_iage, tr_FY_out=tr_FY, &
         tr_lvl_out=tr_lvl, tr_iso_out=tr_iso, tr_aero_out=tr_aero, &
         tr_pond_lvl_out=tr_pond_lvl, tr_pond_topo_out=tr_pond_topo, &
+        tr_pond_sealvl_out=tr_pond_sealvl, &
         tr_snow_out=tr_snow, tr_fsd_out=tr_fsd)
       call icepack_query_tracer_indices(nt_Tsfc_out=nt_Tsfc, nt_sice_out=nt_sice, &
         nt_qice_out=nt_qice, nt_qsno_out=nt_qsno, nt_iage_out=nt_iage, nt_fy_out=nt_fy, &
@@ -2866,7 +2920,7 @@
                    trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
                    trcr_depend(nt_ipnd)  = 2+nt_apnd   ! refrozen pond lid
       endif
-      if (tr_pond_topo) then
+      if (tr_pond_topo .or. tr_pond_sealvl) then
                    trcr_depend(nt_apnd)  = 0           ! melt pond area
                    trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
                    trcr_depend(nt_ipnd)  = 2+nt_apnd   ! refrozen pond lid
@@ -2932,7 +2986,7 @@
          nt_strata    (nt_ipnd,2) = nt_apnd ! on melt pond area
          nt_strata    (nt_ipnd,1) = nt_alvl ! on level ice area
       endif
-      if (tr_pond_topo) then
+      if (tr_pond_topo .or. tr_pond_sealvl) then
          n_trcr_strata(nt_hpnd)   = 1       ! melt pond depth
          nt_strata    (nt_hpnd,1) = nt_apnd ! on melt pond area
          n_trcr_strata(nt_ipnd)   = 1       ! refrozen pond lid
@@ -3017,8 +3071,7 @@
          enddo
 
          if (tmask(i,j,iblk)) &
-            call icepack_aggregate(ncat  = ncat,                  &
-                                   aicen = aicen(i,j,:,iblk),     &
+            call icepack_aggregate(aicen = aicen(i,j,:,iblk),     &
                                    trcrn = trcrn(i,j,:,:,iblk),   &
                                    vicen = vicen(i,j,:,iblk),     &
                                    vsnon = vsnon(i,j,:,iblk),     &
@@ -3027,7 +3080,6 @@
                                    vice  = vice (i,j,  iblk),     &
                                    vsno  = vsno (i,j,  iblk),     &
                                    aice0 = aice0(i,j,  iblk),     &
-                                   ntrcr = ntrcr,                 &
                                    trcr_depend   = trcr_depend(:),   &
                                    trcr_base     = trcr_base(:,:),   &
                                    n_trcr_strata = n_trcr_strata(:), &
@@ -3303,23 +3355,9 @@
          ! location of ice
          !---------------------------------------------------------
 
-         if (trim(ice_data_type) == 'box2001') then
+         icells = 0
 
-            ! place ice on left side of domain
-            icells = 0
-            do j = jlo, jhi
-            do i = ilo, ihi
-               if (tmask(i,j)) then
-                  if (ULON(i,j) < -50./rad_to_deg) then
-                     icells = icells + 1
-                     indxi(icells) = i
-                     indxj(icells) = j
-                  endif            ! ULON
-               endif               ! tmask
-            enddo                  ! i
-            enddo                  ! j
-
-         elseif (trim(ice_data_type) == 'boxslotcyl') then
+         if (trim(ice_data_type) == 'boxslotcyl') then
 
             ! Geometric configuration of the slotted cylinder
             diam     = p3 *dxrect*(nx_global-1)
@@ -3351,8 +3389,10 @@
             enddo
             enddo
 
-         elseif (trim(ice_data_type) == 'uniform') then
+         elseif (trim(ice_data_type) == 'uniform' .or. trim(ice_data_type) == 'box2001') then
             ! all cells not land mask are ice
+            ! box2001 used to have a check for west of 50W, this was changed, so now box2001 is 
+            ! the same as uniform.  keep box2001 option for backwards compatibility.
             icells = 0
             do j = jlo, jhi
             do i = ilo, ihi
@@ -3506,7 +3546,6 @@
                                       Sprofile = salinz(i,j,:),         &
                                       Tprofile = Tmltz(i,j,:),          &
                                       Tsfc  = Tsfc,                     &
-                                      nilyr = nilyr,     nslyr = nslyr, &
                                       qin   = qin(:),    qsn = qsn(:))
 
                ! surface temperature

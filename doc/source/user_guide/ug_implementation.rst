@@ -129,16 +129,25 @@ This is shown in Figure :ref:`fig-Cgrid`.
    Schematic of CICE CD-grid. 
 
 
-The user has several ways to initialize the grid: *popgrid* reads grid
-lengths and other parameters for a nonuniform grid (including tripole
-and regional grids), and *rectgrid* creates a regular rectangular grid.
-The input files **global_gx3.grid** and **global_gx3.kmt** contain the
+The user has several ways to initialize the grid, which can be read from 
+files or created internally. The *rectgrid* code creates a regular rectangular 
+grid (use the namelist option ``grid_type='rectangular'``). The *popgrid* and *popgrid_nc* 
+code reads grid lengths and other parameters for a nonuniform grid (including tripole
+and regional grids). 
+The input files **grid_gx3.bin** and **kmt_gx3.bin** contain the
 :math:`\left<3^\circ\right>` POP grid and land mask;
-**global_gx1.grid** and **global_gx1.kmt** contain the
-:math:`\left<1^\circ\right>` grid and land mask, and **global_tx1.grid** 
-and **global_tx1.kmt** contain the :math:`\left<1^\circ\right>` POP 
+**grid_gx1.bin** and **kmt_gx1.bin** contain the
+:math:`\left<1^\circ\right>` grid and land mask, and **grid_tx1.bin** 
+and **kmt_tx1.bin** contain the :math:`\left<1^\circ\right>` POP 
 tripole grid and land mask. These are binary unformatted, direct access,
-Big Endian files.
+Big Endian files. 
+
+The are also input files in netcdf format for the **gx3** grid,
+(**grid_gx3.nc** and **kmt_gx3.nc**) which can serve as a template for defining
+other grids. At a minimum the grid file needs to to contain ULAT, ULON, HTN, HTE
+and ANGLE variables. If the variables exist, ANGLET, TLON and TLAT will also be 
+read from a netcdf grid file. The kmt (mask) netcdf file needs a variable named 
+kmt or mask, set to 0 for land and 1 for ocean.
 
 The input grid file for the B-grid and CD-grid is identical.  That file
 contains each cells' HTN, HTE, ULON, ULAT, and kmt value.  From those
@@ -1338,6 +1347,13 @@ directory in **iceh_ic.[timeID].nc(da)**. Several history variables are
 hard-coded for instantaneous output regardless of the ``hist_avg`` averaging flag, at
 the frequency given by their namelist flag.
 
+A one-time grid history file can be turned on with the ``grid_outfile`` namelist
+variable.  If ``grid_outfile`` is true, all the grid variables will be written
+to a history file once at the start of the run.  The grid data will only be written
+for blocks that have not been eliminated by the decomposition.  To generate a one-time
+grid history file without land block elimination, set ``distribution_wght = 'blockall'`` 
+and ``grid_outfile = .true.`` in the namelist.
+
 The normalized principal components of internal ice stress (``sig1``, ``sig2``) are computed
 in *principal_stress* and written to the history file. This calculation
 is not necessary for the simulation; principal stresses are merely
@@ -1349,6 +1365,13 @@ representing an average over the sea ice fraction of the grid cell, and
 another that is multiplied by :math:`a_i`, representing an average over
 the grid cell area. Our naming convention attaches the suffix “_ai" to
 the grid-cell-mean variable names.
+
+The units of the variables on the history file may not match internal model units.  For
+netCDF files, variable units are defined in metadata.  History variable conversion from
+internal model units is carried out by the ``cona`` and ``conb`` arguments defined in 
+subroutine **define_hist_field**.  ``cona`` and ``conb`` are multiplicative and additive 
+terms respectively that are hardwired into the source code to convert model units to
+history units.
 
 Beginning with CICE v6, history variables requested by the Sea Ice Model Intercomparison 
 Project (SIMIP) :cite:`Notz16` have been added as possible history output variables (e.g. 

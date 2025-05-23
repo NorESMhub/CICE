@@ -822,19 +822,29 @@
                  write(ncfile,'(a,a,i4.4,a,a)') &
                        history_file(1:lenstr(history_file))//trim(cstream),'.', &
                        iyear,'.',trim(suffix)
+              elseif (histfreq(ns) == 'g') then
+                 write(ncfile,'(a,a,a,a)')  &
+                       history_file(1:lenstr(history_file)),'_grid', &
+                       '.',trim(suffix)
               endif
 
            else                     ! instantaneous
-              write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
-                    history_file(1:lenstr(history_file))//trim(cstream),'_inst.', &
-                    iyear,'-',imonth,'-',iday,'-',msec,'.',trim(suffix)
+              if (histfreq(ns) == 'g') then
+                 write(ncfile,'(a,a,a,a)')  &
+                       history_file(1:lenstr(history_file)),'_grid', &
+                       '.',trim(suffix)
+              else
+                 write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
+                       history_file(1:lenstr(history_file))//trim(cstream),'_inst.', &
+                       iyear,'-',imonth,'-',iday,'-',msec,'.',trim(suffix)
+              endif
            endif
 
         endif
 
         ! Check whether the filename is already in use.
         ! Same filename in multiple history streams leads to files being overwritten (not good).
-        ! The current filename convention means we just have to check latest filename, 
+        ! The current filename convention means we just have to check latest filename,
         ! not all filenames ever generated because of use of current model date/time in filename.
 
         ! write(nu_diag,'(2a,i2,1x,a)') subname, 'debug ncfile= ',ns,trim(ncfile)
