@@ -1,4 +1,6 @@
 [submodule "icepack"]
 	path = icepack
-        hash = 0ae92920e6e3d31d65e9131413a94d67a1245186
-	url = https://github.com/ESCOMP/icepack
+	url = https://github.com/NorESMhub/Icepack
+	fxtag = noresm_cesm3_cice_20250609_v0
+	fxrequired = AlwaysRequired
+	fxDONOTUSEurl = https://github.com/ESCOMP/Icepack
