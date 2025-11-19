@@ -152,7 +152,7 @@
 
       real (kind=dbl_kind) :: ustar_min, albicev, albicei, albsnowv, albsnowi, &
         ahmax, R_ice, R_pnd, R_snw, dT_mlt, rsnw_mlt, emissivity, hi_min, &
-        mu_rdg, hs0, dpscale, rfracmin, rfracmax, pndaspect, hs1, hp1, &
+        mu_rdg, hs0, dpscale, rfracmin, rfracmax, pndaspect, apnd_sl, hs1, hp1, &
         a_rapid_mode, Rac_rapid_mode, aspect_rapid_mode, dSdt_slow_mode, &
         phi_c_slow_mode, phi_i_mushy, kalg, atmiter_conv, Pstar, Cstar, &
         sw_frac, sw_dtemp, floediam, hfrazilmin, iceruf, iceruf_ocn, &
@@ -241,7 +241,6 @@
         dSdt_slow_mode, phi_c_slow_mode, phi_i_mushy,                   &
         floediam,       hfrazilmin,      Tliquidus_max,   hi_min,       &
         tscale_pnd_drain
-        
 
       namelist /dynamics_nml/ &
         kdyn,           ndte,           revised_evp,    yield_curve,    &
@@ -249,7 +248,7 @@
         brlx,           arlx,           ssh_stress,                     &
         advection,      coriolis,       kridge,         ktransport,     &
         kstrength,      krdg_partic,    krdg_redist,    mu_rdg,         &
-        e_yieldcurve,   e_plasticpot,   visc_method,              &
+        e_yieldcurve,   e_plasticpot,   visc_method,                    &
         maxits_nonlin,  precond,        dim_fgmres,                     &
         dim_pgmres,     maxits_fgmres,  maxits_pgmres,  monitor_nonlin, &
         monitor_fgmres, monitor_pgmres, reltol_nonlin,  reltol_fgmres,  &
@@ -272,7 +271,7 @@
         hs0,            dpscale,         frzpnd,                        &
         tscale_pnd_drain, & 
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
-        hp1
+        hp1,            apnd_sl
 
       namelist /snow_nml/ &
         snwredist,      snwgrain,        rsnw_fall,     rsnw_tmax,      &
@@ -503,6 +502,7 @@
       rsnw_mlt  = 1500._dbl_kind  ! maximum melting snow grain radius
       kalg      = 0.60_dbl_kind   ! algae absorption coefficient for 0.5 m thick layer
                                   ! 0.5 m path of 75 mg Chl a / m2
+      apnd_sl   = 0.27_dbl_kind   ! equilibrium pond fraction in sealvl ponds
       hp1       = 0.01_dbl_kind   ! critical pond lid thickness for topo ponds
       hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
       hs1       = 0.03_dbl_kind   ! snow depth for transition to bare pond ice (m)
@@ -1087,6 +1087,7 @@
       call broadcast_scalar(dT_mlt,               master_task)
       call broadcast_scalar(rsnw_mlt,             master_task)
       call broadcast_scalar(kalg,                 master_task)
+      call broadcast_scalar(apnd_sl,              master_task)
       call broadcast_scalar(hp1,                  master_task)
       call broadcast_scalar(hs0,                  master_task)
       call broadcast_scalar(hs1,                  master_task)
@@ -2451,9 +2452,11 @@
             write(nu_diag,1002) ' hs1              = ', hs1,' : snow depth of transition to pond ice'
          elseif (tr_pond_topo) then
             write(nu_diag,1010) ' tr_pond_topo     = ', tr_pond_topo,' : topo pond formulation'
+            write(nu_diag,*) '     WARNING: dpnd history fields are turned off for topo ponds'
             write(nu_diag,1002) ' hp1              = ', hp1,' : critical ice lid thickness for topo ponds'
          elseif (tr_pond_sealvl) then
             write(nu_diag,1010) ' tr_pond_sealvl   = ', tr_pond_sealvl,' : sealvl pond formulation'
+            write(nu_diag,1002) ' apnd_sl          = ', apnd_sl,' : equilibrium pond fraction'
          elseif (trim(shortwave) == 'ccsm3') then
             write(nu_diag,*) 'Pond effects on radiation are treated implicitly in the ccsm3 shortwave scheme'
          else
@@ -2785,6 +2788,7 @@
          atmbndy_in=atmbndy, calc_strair_in=calc_strair, formdrag_in=formdrag, highfreq_in=highfreq, &
          kitd_in=kitd, kcatbound_in=kcatbound, hs0_in=hs0, dpscale_in=dpscale, frzpnd_in=frzpnd, &
          rfracmin_in=rfracmin, rfracmax_in=rfracmax, pndaspect_in=pndaspect, hs1_in=hs1, hp1_in=hp1, &
+         apnd_sl_in=apnd_sl, &
          ktherm_in=ktherm, calc_Tsfc_in=calc_Tsfc, conduct_in=conduct, semi_implicit_Tsfc_in=semi_implicit_Tsfc, &
          a_rapid_mode_in=a_rapid_mode, Rac_rapid_mode_in=Rac_rapid_mode, vapor_flux_correction_in=vapor_flux_correction, &
          floediam_in=floediam, hfrazilmin_in=hfrazilmin, Tliquidus_max_in=Tliquidus_max, &
