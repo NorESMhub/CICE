@@ -157,7 +157,8 @@
         phi_c_slow_mode, phi_i_mushy, kalg, atmiter_conv, Pstar, Cstar, &
         sw_frac, sw_dtemp, floediam, hfrazilmin, iceruf, iceruf_ocn, &
         rsnw_fall, rsnw_tmax, rhosnew, rhosmin, rhosmax, Tliquidus_max, &
-        windmin, drhosdwind, snwlvlfac, tscale_pnd_drain
+        windmin, drhosdwind, snwlvlfac, snw_growth_wet, drsnw_min, snwliq_max, &
+        tscale_pnd_drain
 
       integer (kind=int_kind) :: ktherm, kstrength, krdg_partic, krdg_redist, natmiter, &
         kitd, kcatbound, ktransport
@@ -277,6 +278,7 @@
         snwredist,      snwgrain,        rsnw_fall,     rsnw_tmax,      &
         rhosnew,        rhosmin,         rhosmax,       snwlvlfac,      &
         windmin,        drhosdwind,      use_smliq_pnd, snw_aging_table,&
+        snw_growth_wet, drsnw_min,       snwliq_max,                    &
         snw_filename,   snw_rhos_fname,  snw_Tgrd_fname,snw_T_fname,    &
         snw_tau_fname,  snw_kappa_fname, snw_drdt0_fname
 
@@ -531,6 +533,13 @@
       windmin   =   10.0_dbl_kind ! minimum wind speed to compact snow (m/s)
       drhosdwind=   27.3_dbl_kind ! wind compaction factor for snow (kg s/m^4)
       snwlvlfac =    0.3_dbl_kind ! fractional increase in snow depth for bulk redistribution
+      snw_growth_wet = 4.22e5_dbl_kind ! wet metamorphism parameter (um^3/s)
+                                       ! 1.e18 * 4.22e-13 (Oleson 2010)
+      drsnw_min  =    0.0_dbl_kind  ! minimum snow grain growth factor
+      snwliq_max =    0.033_dbl_kind ! irreducible saturation fraction
+                                     ! 0.033 (Anderson 1976)
+                                     ! 0.09 to 0.1  (Denoth et al, 1979 & Brun 1989)
+      
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -628,7 +637,7 @@
       phi_i_mushy       =    0.85_dbl_kind ! liquid fraction of congelation ice
       Tliquidus_max     =    0.00_dbl_kind ! maximum liquidus temperature of mush (C)
 
-      floediam          =    50.0_dbl_kind ! min thickness of new frazil ice (m)
+      floediam          =   300.0_dbl_kind ! min thickness of new frazil ice (m)
       hfrazilmin        =    0.05_dbl_kind ! effective floe diameter (m)
 
       ! shortwave redistribution in the thermodynamics
@@ -1109,6 +1118,9 @@
       call broadcast_scalar(snwgrain,             master_task)
       call broadcast_scalar(use_smliq_pnd,        master_task)
       call broadcast_scalar(rsnw_fall,            master_task)
+      call broadcast_scalar(snw_growth_wet,       master_task)
+      call broadcast_scalar(drsnw_min,            master_task)
+      call broadcast_scalar(snwliq_max,           master_task)
       call broadcast_scalar(rsnw_tmax,            master_task)
       call broadcast_scalar(rhosnew,              master_task)
       call broadcast_scalar(rhosmin,              master_task)
@@ -2508,9 +2520,15 @@
                                    ' : Using snow metamorphosis scheme'
                write(nu_diag,1002) ' rsnw_tmax        = ', rsnw_tmax, &
                                    ' : maximum snow radius (10^-6 m)'
-            endif
-            write(nu_diag,1002) ' rsnw_fall        = ', rsnw_fall, &
+               write(nu_diag,1002) ' rsnw_fall        = ', rsnw_fall, &
                                 ' : radius of new snow (10^-6 m)'
+               write(nu_diag,1002) ' drsnw_min        = ', drsnw_min, &
+                                ' : minimum dry snow aging scaling (0 - 1)'
+               write(nu_diag,1002) ' snwliq_max       = ', snwliq_max, &
+                                ' : maximum water holding capacity of snow '
+               write(nu_diag,1002) ' snw_growth_wet       = ', snw_growth_wet, &
+                                ' : wet metamorphism parameter (um^3/s) '
+            endif
             if (snwgrain) then
                if (use_smliq_pnd) then
                   tmpstr2 = ' : Using liquid water in snow for melt ponds'
@@ -2802,8 +2820,11 @@
          windmin_in=windmin, drhosdwind_in=drhosdwind, &
          rsnw_fall_in=rsnw_fall, rsnw_tmax_in=rsnw_tmax, rhosnew_in=rhosnew, &
          snwlvlfac_in=snwlvlfac, rhosmin_in=rhosmin, rhosmax_in=rhosmax, &
-         snwredist_in=snwredist, snwgrain_in=snwgrain, snw_aging_table_in=trim(snw_aging_table), &
+         snwredist_in=snwredist, snwgrain_in=snwgrain, &
+         snw_aging_table_in=trim(snw_aging_table), &
+         snw_growth_wet_in=snw_growth_wet,&
          sw_redist_in=sw_redist, sw_frac_in=sw_frac, sw_dtemp_in=sw_dtemp, &
+         drsnw_min_in=drsnw_min, snwliq_max_in=snwliq_max, &
          tscale_pnd_drain_in=tscale_pnd_drain)
       call icepack_init_tracer_flags(tr_iage_in=tr_iage, tr_FY_in=tr_FY, &
          tr_lvl_in=tr_lvl, tr_iso_in=tr_iso, tr_aero_in=tr_aero, &
