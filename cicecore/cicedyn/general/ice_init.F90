@@ -279,6 +279,7 @@
         snwredist,      snwgrain,        rsnw_fall,     rsnw_tmax,      &
         rhosnew,        rhosmin,         rhosmax,       snwlvlfac,      &
         windmin,        drhosdwind,      use_smliq_pnd, snw_aging_table,&
+        snw_growth_wet, drsnw_min,       snwliq_max,                    &
         snw_filename,   snw_rhos_fname,  snw_Tgrd_fname,snw_T_fname,    &
         snw_tau_fname,  snw_kappa_fname, snw_drdt0_fname
 
