@@ -969,7 +969,7 @@
                                            trcrn       = trcrn          (i,j,:,:,iblk), &
                                            d_afsd_wave = d_afsd_wave    (i,j,:,  iblk), &
                                            wave_height = wave_sig_ht    (i,j,    iblk))
-             endif
+            endif
          end do ! i
          end do ! j
       end do    ! iblk
