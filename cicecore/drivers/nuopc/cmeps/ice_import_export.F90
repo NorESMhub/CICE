@@ -929,7 +929,7 @@ contains
     real    (kind=dbl_kind) :: floethick(nx_block,ny_block,max_blocks) ! ice thickness
     logical (kind=log_kind) :: tr_fsd
     integer (kind=int_kind) :: nt_fsd
-    real    (kind=dbl_kind) :: Tffresh
+    real    (kind=dbl_kind) :: Tffresh, stefan_boltzmann
     real    (kind=dbl_kind), allocatable :: tempfld(:,:,:)
     real    (kind=dbl_kind), pointer :: dataptr_ifrac_n(:,:)
     real    (kind=dbl_kind), pointer :: dataptr_swpen_n(:,:)
@@ -941,6 +941,7 @@ contains
     if (io_dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
     call icepack_query_parameters(Tffresh_out=Tffresh)
+    call icepack_query_parameters(stefan_boltzmann_out=stefan_boltzmann)
     !    call icepack_query_parameters(tfrz_option_out=tfrz_option, &
     !       modal_aero_out=modal_aero, z_tracers_out=z_tracers, skl_bgc_out=skl_bgc, &
     !       Tffresh_out=Tffresh)
@@ -1081,6 +1082,7 @@ contains
        call state_setexport(exportState, 'Si_imask', input=ocn_gridcell_frac, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
+       tempfld(:,:,:) = c0
        do iblk = 1, nblocks
           this_block = get_block(blocks_ice(iblk),iblk)
           ilo = this_block%ilo
@@ -1142,6 +1144,7 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Snow height
+    tempfld(:,:,:) = c0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
        ilo = this_block%ilo
@@ -1199,10 +1202,28 @@ contains
          areacor=mod2med_areacor, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+    ! Fix outgoing longwave if aice_init = 0, but aice > 0.
+    tempfld(:,:,:) = flwout(:,:,:)
+    do iblk = 1, nblocks
+       this_block = get_block(blocks_ice(iblk),iblk)
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+       do j = jlo, jhi
+          do i = ilo, ihi
+             if ( tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 .and. flwout(i,j,iblk) > -puny) then
+                 tempfld(i,j,iblk) = (-stefan_boltzmann *(Tf(i,j,iblk) + Tffresh)**4) / ailohi(i,j,iblk)
+             end if
+          end do
+       end do
+    end do
     ! longwave outgoing (upward), average over ice fraction only
-    call state_setexport(exportState, 'Faii_lwup' , input=flwout, lmask=tmask, ifrac=ailohi, &
+    call state_setexport(exportState, 'Faii_lwup' , input=tempfld, lmask=tmask, ifrac=ailohi, &
          areacor=mod2med_areacor, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    deallocate(tempfld)
 
     ! Evaporative water flux (kg/m^2/s)
     call state_setexport(exportState, 'Faii_evap' , input=evap, lmask=tmask, ifrac=ailohi, &
