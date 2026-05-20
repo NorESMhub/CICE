@@ -313,7 +313,7 @@
       use ice_history_shared, only: a2D, a3Df, a4Df, nfsd_hist, &
          ncat_hist, accum_hist_field, n3Dacum, n4Dscum
       use ice_state, only: trcrn, aicen, vicen, aice
-      use ice_arrays_column, only: wave_sig_ht, floe_rad_c, floe_binwidth, &
+      use ice_arrays_column, only: wave_sig_ht, wave_spectrum, wavefreq, floe_rad_c, floe_binwidth, &
          d_afsd_newi, d_afsd_latg, d_afsd_latm, d_afsd_wave, d_afsd_weld
 
       real (kind=dbl_kind), intent(in) :: &
@@ -325,7 +325,7 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-         i, j, n, k, & ! loop indices
+         i, j, n, k, ii, & ! loop indices
          nt_fsd        ! fsd tracer index
       logical (kind=log_kind) :: tr_fsd
       real (kind=dbl_kind) :: floeshape, puny
