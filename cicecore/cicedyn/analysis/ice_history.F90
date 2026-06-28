@@ -479,6 +479,7 @@
       call broadcast_scalar (f_Qref, master_task)
       call broadcast_scalar (f_congel, master_task)
       call broadcast_scalar (f_frazil, master_task)
+      call broadcast_scalar (f_frazheat, master_task)
       call broadcast_scalar (f_snoice, master_task)
       call broadcast_scalar (f_dsnow, master_task)
       call broadcast_scalar (f_meltt, master_task)
@@ -547,6 +548,8 @@
       call broadcast_scalar (f_frz_onset, master_task)
       call broadcast_scalar (f_aisnap, master_task)
       call broadcast_scalar (f_hisnap, master_task)
+      call broadcast_scalar (f_ihcsnap, master_task)
+      call broadcast_scalar (f_shcsnap, master_task)
       call broadcast_scalar (f_sitimefrac, master_task)
       call broadcast_scalar (f_sithick, master_task)
       call broadcast_scalar (f_siage, master_task)
@@ -1008,6 +1011,11 @@
              "none", mps_to_cmpdy/dt, c0,                                 &
              ns1, f_frazil)
 
+         call define_hist_field(n_frazheat,"frazil_heat","W/m^2",tstr2D, tcstr, &
+             "Heat released in ocean during frazil ice production",                                       &
+             "none", c1, c0,                               &
+             ns1, f_frazheat)
+
          call define_hist_field(n_snoice,"snoice","cm/day",tstr2D, tcstr, &
              "snow-ice formation",                                        &
              "none", mps_to_cmpdy/dt, c0,                                 &
@@ -1359,6 +1367,17 @@
              "ice area snapshot",                                    &
              "none", c1, c0,                                         &
              ns1, f_aisnap)
+
+         call define_hist_field(n_ihcsnap,"ihcsnap","1",tstr2D, tcstr, &
+             "ice enthalpy snapshot",                                    &
+             "none", c1, c0,                                         &
+             ns1, f_ihcsnap)
+         
+         call define_hist_field(n_shcsnap,"shcsnap","1",tstr2D, tcstr, &
+             "snow enthalpy snapshot",                                    &
+             "none", c1, c0,                                         &
+             ns1, f_shcsnap)
+
 
          call define_hist_field(n_trsig,"trsig","N/m",tstr2D, tcstr, &
              "internal stress tensor trace",                         &
@@ -2766,6 +2785,18 @@
            call accum_hist_field(n_icepresent, iblk, worka(:,:), a2D)
          endif
 
+
+         if (f_frazheat(1:1) /= 'x') then
+           worka(:,:) = c0
+           do j = jlo, jhi
+           do i = ilo, ihi
+              worka(i,j) = - max(c0,frzmlt_init(i,j,iblk))
+           enddo
+           enddo
+           call accum_hist_field(n_frazheat, iblk, worka(:,:), a2D)
+         endif
+
+         
          ! 2D CMIP fields
 
          if (f_sitimefrac(1:1) /= 'x') then
@@ -3835,6 +3866,11 @@
                  if (n_frz_onset(ns) /= 0) a2D(i,j,n_frz_onset(ns),iblk) = spval_dbl
                  if (n_hisnap   (ns) /= 0) a2D(i,j,n_hisnap(ns),   iblk) = spval_dbl
                  if (n_aisnap   (ns) /= 0) a2D(i,j,n_aisnap(ns),   iblk) = spval_dbl
+
+        
+                 if (n_ihcsnap   (ns) /= 0) a2D(i,j,n_ihcsnap(ns),   iblk) = spval_dbl
+                 if (n_shcsnap   (ns) /= 0) a2D(i,j,n_shcsnap(ns),   iblk) = spval_dbl
+                 
                  if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),    iblk) = spval_dbl
                  if (n_iage     (ns) /= 0) a2D(i,j,n_iage(ns),     iblk) = spval_dbl
                  if (n_FY       (ns) /= 0) a2D(i,j,n_FY(ns),       iblk) = spval_dbl
@@ -3880,6 +3916,23 @@
                  if (n_aisnap   (ns) /= 0) a2D(i,j,n_aisnap(ns),iblk)    = &
                        aice(i,j,iblk)
 
+                 if (n_ihcsnap(ns) /= 0) then
+                    a2D(i,j,n_ihcsnap(ns),iblk) = c0
+                    do k = 1,nzilyr
+                       a2D(i,j,n_ihcsnap(ns),iblk)=a2D(i,j,n_ihcsnap(ns),iblk)&
+                            + trcr(i,j,nt_qice+k-1,iblk) * &
+                            vice(i,j,iblk)/real(nzilyr,kind=dbl_kind)
+                    enddo
+                 endif
+                 if (n_shcsnap(ns) /= 0) then
+                    a2D(i,j,n_shcsnap(ns),iblk) = c0
+                    do k = 1,nzslyr
+                       a2D(i,j,n_shcsnap(ns),iblk)=a2D(i,j,n_shcsnap(ns),iblk)&
+                            + trcr(i,j,nt_qsno+k-1,iblk) * &
+                            vsno(i,j,iblk)/real(nzslyr,kind=dbl_kind)
+                    enddo
+                 endif
+                 
                  if (kdyn == 2) then  ! for EAP dynamics different time of output
                     if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),iblk ) = &
                                         strength(i,j,iblk)
