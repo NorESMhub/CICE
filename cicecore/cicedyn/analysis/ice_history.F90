@@ -3031,7 +3031,8 @@
          endif
 
          if (f_sisndmasssnf(1:1) /= 'x') then
-           call accum_hist_field(n_sisndmasssnf, iblk, fsnow(:,:,iblk), a2D)
+
+            call accum_hist_field(n_sisndmasssnf, iblk, aice_init(:,:,iblk)*fsnow(:,:,iblk), a2D)
          endif
 
          if (f_sisndmassmelt(1:1) /= 'x') then
@@ -3063,12 +3064,12 @@
          endif
 
          if (f_siflsenstop(1:1) /= 'x') then
-           worka(:,:) = c0
-           do j = jlo, jhi
-           do i = ilo, ihi
-              worka(i,j) = aice(i,j,iblk)*fsens(i,j,iblk)
-           enddo
-           enddo
+           !worka(:,:) = c0
+           !do j = jlo, jhi
+           !do i = ilo, ihi
+           !   worka(i,j) = aice(i,j,iblk)*fsens(i,j,iblk)
+           !enddo
+           !enddo
            call accum_hist_field(n_siflsenstop, iblk, aice(:,:,iblk)*fsens(:,:,iblk), a2D)
          endif
 
