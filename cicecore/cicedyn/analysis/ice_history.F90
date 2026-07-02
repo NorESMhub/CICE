@@ -3000,7 +3000,7 @@
          endif
 
          if (f_sisndmasssnf(1:1) /= 'x') then
-           call accum_hist_field(n_sisndmasssnf, iblk, fsnow(:,:,iblk), a2D)
+            call accum_hist_field(n_sisndmasssnf, iblk, aice_init(:,:,iblk)*fsnow(:,:,iblk), a2D)
          endif
 
          if (f_sisndmassmelt(1:1) /= 'x') then
