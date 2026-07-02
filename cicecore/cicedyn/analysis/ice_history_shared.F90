@@ -256,6 +256,7 @@
            f_Tair      = 'm', &
            f_Tref      = 'm', f_Qref       = 'm', &
            f_congel    = 'm', f_frazil     = 'm', &
+           f_frazheat  = 'm', &
            f_snoice    = 'm', f_dsnow      = 'm', &
            f_meltt     = 'm', f_melts      = 'm', &
            f_meltb     = 'm', f_meltl      = 'm', &
@@ -292,6 +293,7 @@
            f_mlt_onset = 'm', f_frz_onset  = 'm', &
            f_iage      = 'm', f_FY         = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
+           f_ihcsnap    = 'm', f_shcsnap     = 'm', &
            f_sithick   = 'x', f_sisnthick  = 'x', &
            f_siage     = 'x', f_siconc     = 'x', &
            f_sisnconc  = 'x', f_sisnmass   = 'x', &
@@ -437,6 +439,7 @@
            f_Tair,      &
            f_Tref,      f_Qref     , &
            f_congel,    f_frazil   , &
+           f_frazheat,  &
            f_snoice,    f_dsnow    , &
            f_meltt,     f_melts    , &
            f_meltb,     f_meltl    , &
@@ -473,6 +476,7 @@
            f_mlt_onset, f_frz_onset, &
            f_iage,      f_FY       , &
            f_hisnap,    f_aisnap   , &
+           f_ihcsnap,    f_shcsnap   , &
            f_sithick,   f_sisnthick, &
            f_siage,     f_siconc   , &
            f_sisnconc,  f_sisnmass , &
@@ -646,6 +650,7 @@
            n_Tair       , &
            n_Tref       , n_Qref       , &
            n_congel     , n_frazil     , &
+           n_frazheat   , &
            n_snoice     , n_dsnow      , &
            n_meltt      , n_melts      , &
            n_meltb      , n_meltl      , &
@@ -682,6 +687,7 @@
            n_dagedtt    , n_dagedtd    , &
            n_mlt_onset  , n_frz_onset  , &
            n_hisnap     , n_aisnap     , &
+           n_ihcsnap     , n_shcsnap     , &
            n_sithick    , n_sisnthick  , &
            n_siage      , n_siconc     , &
            n_sisnconc   , n_sisnmass   , &
