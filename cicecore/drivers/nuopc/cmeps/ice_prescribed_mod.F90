@@ -93,8 +93,7 @@ contains
     character(*),parameter           :: subName = "('ice_prescribed_init')"
     character(*),parameter           :: F00 = "('(ice_prescribed_init) ',4a)"
     character(*),parameter           :: F01 = "('(ice_prescribed_init) ',a,i0)"
-    character(*),parameter           :: F02 = "('(ice_prescribed_init) ',2a,i0,)"
-    character(*),parameter           :: F02 = "('(ice_prescribed_init) ',a,d10.4,)"
+    character(*),parameter           :: F02 = "('(ice_prescribed_init) ',a,d8.4)"
     !--------------------------------
 
     namelist /ice_prescribed_nml/ &
@@ -172,7 +171,7 @@ contains
           write(nu_diag,F00) '  stream_varname   = ',trim(stream_varname)
           write(nu_diag,F00) '  stream_mapalgo   = ',trim(stream_mapalgo)
           write(nu_diag,F00) '  stream_taxmode   = ',trim(stream_taxmode)
-          write(nu_diag,F02) '  stream_taxmode   = ',trim(stream_taxmode)
+          write(nu_diag,F02) '  stream_dtlimit   = ',stream_dtlimit
           do n = 1,nFile
              write(nu_diag,F00) '  stream_datafiles   = ',trim(stream_dataFiles(n))
           end do
