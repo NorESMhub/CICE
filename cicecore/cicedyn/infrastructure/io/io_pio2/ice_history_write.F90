@@ -291,23 +291,19 @@
          ! A previous run left this file open when it wrote its restart.
          ! Reopen it and carry on, rather than starting a new one.  Reasons to
          ! give up and start fresh are reported and are never fatal.
-         resumed = .true.
-         if (resumed) then
-            fexists = .false.
-            if (my_task == master_task) then
-               inquire(file=trim(resume_fname(ns)), exist=fexists)
-            endif
-            call broadcast_scalar(fexists, master_task)
-            if (.not. fexists) then
-               if (my_task == master_task) then
-                  write(nu_diag,*) subname,' NOTE ',trim(resume_fname(ns)), &
-                     ' named by the restart is not on disk, starting a new file'
-               endif
-               resumed = .false.
-            endif
+         fexists = .false.
+         if (my_task == master_task) then
+            inquire(file=trim(resume_fname(ns)), exist=fexists)
          endif
+         call broadcast_scalar(fexists, master_task)
 
-         if (resumed) then
+         if (.not. fexists) then
+            if (my_task == master_task) then
+               write(nu_diag,*) subname,' NOTE ',trim(resume_fname(ns)), &
+                  ' named by the restart is not on disk, starting a new file'
+            endif
+         else
+            resumed = .true.
             filename = resume_fname(ns)
             ncfile   = resume_fname(ns)
             File%fh  = -1
