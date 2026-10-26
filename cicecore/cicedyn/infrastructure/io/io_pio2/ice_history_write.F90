@@ -281,8 +281,18 @@
          if (lperiod /= -1 .and. lperiod == period_hist(ns)) then
             newfile = .false.
          else
+            ! The period changed, so the open file is complete.  For an
+            ! averaged stream the file has normally been closed already, when
+            ! its last sample was written; this closes the ones that cannot
+            ! know in advance which sample was the last, such as an hourly
+            ! stream whose dates are not backed up.
             call pio_closefile(File_hist(ns))
+            if (my_task == master_task) then
+               write(nu_diag,'(4a,i6,a)') subname,' Closed ', &
+                    trim(fname_hist(ns)),' with ',nrec_hist(ns),' time samples'
+            endif
             file_open_hist(ns) = .false.
+            nrec_hist(ns)      = 0
          endif
       elseif (len_trim(resume_fname(ns)) > 0 .and. &
               (.not. resume_allowed .or. &
@@ -360,7 +370,7 @@
                period_hist(ns) = resume_period(ns)
                fname_hist(ns)  = resume_fname(ns)
                if (my_task == master_task) then
-                  write(nu_diag,'(2a,a,i6,a)') subname,' Resuming ', &
+                  write(nu_diag,'(4a,i6,a)') subname,' Resuming ', &
                      trim(ncfile),' after ',resume_nrec(ns),' samples'
                endif
             endif
@@ -1595,7 +1605,7 @@
          file_open_hist(ns) = .false.
          nrec_hist(ns)      = 0
          if (my_task == master_task) then
-            write(nu_diag,'(2a,a,i6,a)') subname,' Closed ',trim(ncfile), &
+            write(nu_diag,'(4a,i6,a)') subname,' Closed ',trim(ncfile), &
                  ' with ',nrec,' time samples'
          endif
       else
@@ -1647,7 +1657,7 @@
             call pio_closefile(File_hist(ns))
             file_open_hist(ns) = .false.
             if (my_task == master_task) then
-               write(nu_diag,'(2a,a,i6,a)') subname,' Closed ', &
+               write(nu_diag,'(4a,i6,a)') subname,' Closed ', &
                     trim(fname_hist(ns)),' with ',nrec_hist(ns),' time samples'
             endif
             nrec_hist(ns) = 0
