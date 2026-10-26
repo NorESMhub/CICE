@@ -336,8 +336,8 @@
                period_hist(ns) = lperiod
                fname_hist(ns)  = resume_fname(ns)
                if (my_task == master_task) then
-                  write(nu_diag,*) subname,' Resuming ',trim(ncfile), &
-                     ' after ',resume_nrec(ns),' samples'
+                  write(nu_diag,'(2a,a,i6,a)') subname,' Resuming ', &
+                     trim(ncfile),' after ',resume_nrec(ns),' samples'
                endif
             endif
          endif
@@ -927,7 +927,9 @@
 
          call ice_pio_check(pio_inq_varid(File,'time',varid), &
               subname//' ERROR: getting var time',file=__FILE__,line=__LINE__)
-         call ice_pio_check(pio_put_var(File,varid,(/1/),ltime2), &
+         ! pio_put_var takes an explicit start and is not affected by
+         ! pio_setframe, so the record index has to be given here.
+         call ice_pio_check(pio_put_var(File,varid,(/nrec/),ltime2), &
               subname//' ERROR: setting var time',file=__FILE__,line=__LINE__)
 
          if (hist_avg(ns) .and. .not. write_ic) then
@@ -1157,7 +1159,7 @@
          call pio_setframe(File, varid, int(nrec,kind=PIO_OFFSET_KIND))
 #endif
          call pio_seterrorhandling(File, PIO_RETURN_ERROR)
-         call ice_pio_check(pio_put_var(File,varid,(/1/),time_beg(ns)), &
+         call ice_pio_check(pio_put_var(File,varid,(/nrec/),time_beg(ns)), &
                             subname// ' ERROR: writing variable '//'time_beg', &
                             file=__FILE__, line=__LINE__)
 
@@ -1171,7 +1173,7 @@
          call pio_setframe(File, varid, int(nrec,kind=PIO_OFFSET_KIND))
 #endif
          call pio_seterrorhandling(File, PIO_RETURN_ERROR)
-         call ice_pio_check(pio_put_var(File,varid,(/1/),avgct(ns)), &
+         call ice_pio_check(pio_put_var(File,varid,(/nrec/),avgct(ns)), &
                             subname// ' ERROR: writing variable '//'avgct', &
                             file=__FILE__, line=__LINE__)
 
@@ -1572,7 +1574,8 @@
          period_hist(ns)    = lperiod
          file_open_hist(ns) = .true.
          if (my_task == master_task) then
-            write(nu_diag,*) subname,' Wrote sample ',nrec,' to ',trim(ncfile)
+            write(nu_diag,'(2a,i6,2a)') subname,' Wrote sample ',nrec, &
+                 ' to ',trim(ncfile)
          endif
       endif
 
@@ -1609,8 +1612,8 @@
             call pio_closefile(File_hist(ns))
             file_open_hist(ns) = .false.
             if (my_task == master_task) then
-               write(nu_diag,*) subname,' Closed ',trim(fname_hist(ns)), &
-                                ' with ',nrec_hist(ns),' time samples'
+               write(nu_diag,'(2a,a,i6,a)') subname,' Closed ', &
+                    trim(fname_hist(ns)),' with ',nrec_hist(ns),' time samples'
             endif
             nrec_hist(ns) = 0
          endif
