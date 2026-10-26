@@ -79,6 +79,7 @@
       ! stopping and those later records have to be written again.
       character (len=char_len_long) :: resume_fname(max_nstrm) = ''
       integer (kind=int_kind)       :: resume_nrec(max_nstrm) = 0
+      integer (kind=int_kind)       :: resume_period(max_nstrm) = -1
 
       ! Resuming is only correct for a continue run.  A branch or hybrid run
       ! reads another case's restart, or the same case at an earlier date, and
@@ -193,6 +194,7 @@
       logical (kind=log_kind), save :: first_call = .true.
 
       logical (kind=log_kind) :: use_period ! false for ic and histrest files
+      logical (kind=log_kind) :: period_ends ! sample is the last of its period
       integer (kind=int_kind) :: nrec     ! record this call writes
       logical (kind=log_kind) :: newfile  ! true if a file must be created
       logical (kind=log_kind) :: resumed  ! true if an existing file reopened
@@ -233,6 +235,7 @@
       ! file.  A period of -1 means hist_file_period is not in use.
       pyear  = myear
       pmonth = mmonth
+      period_ends = .false.
       if (hist_avg(ns) .and. histfreq(ns) /= '1' .and. &
           histfreq(ns) /= 'h' .and. histfreq(ns) /= 'H') then
          if (new_year) then
@@ -240,6 +243,19 @@
             pmonth = 12
          elseif (new_month) then
             pmonth = mmonth - 1
+         endif
+
+         ! Because the date was backed up, this sample is the last one of its
+         ! month whenever a new month has begun, and the last of its year
+         ! whenever a new year has begun.  The file can therefore be closed as
+         ! soon as this sample is written, rather than waiting for the next
+         ! period's first sample to reveal that the period has ended.  Waiting
+         ! would leave a finished period unwritten, and a run that stopped in
+         ! between would lose it.
+         if (trim(hist_file_period(ns)) == 'month') then
+            period_ends = new_month .or. new_year
+         elseif (trim(hist_file_period(ns)) == 'year') then
+            period_ends = new_year
          endif
       endif
 
@@ -270,21 +286,29 @@
          endif
       elseif (len_trim(resume_fname(ns)) > 0 .and. &
               (.not. resume_allowed .or. &
-               index(trim(resume_fname(ns)), trim(history_file)) == 0)) then
+               index(trim(resume_fname(ns)), trim(history_file)) == 0 .or. &
+               resume_period(ns) /= lperiod)) then
 
          ! The restart names a history file that must not be continued.
          if (my_task == master_task) then
             if (.not. resume_allowed) then
                write(nu_diag,*) subname,' NOTE this is not a continue run, so ', &
                   trim(resume_fname(ns)),' is not resumed; starting a new file'
-            else
+            elseif (index(trim(resume_fname(ns)), trim(history_file)) == 0) then
                write(nu_diag,*) subname,' NOTE ',trim(resume_fname(ns)), &
                   ' does not belong to this case, so it is not resumed;'// &
                   ' starting a new file'
+            else
+               ! The restart was written at the end of a period, so the file it
+               ! names is complete and this sample belongs to the next one.
+               write(nu_diag,*) subname,' NOTE ',trim(resume_fname(ns)), &
+                  ' covers a period that has ended, so it is not resumed;'// &
+                  ' starting a new file'
             endif
          endif
-         resume_fname(ns) = ''
-         resume_nrec(ns)  = 0
+         resume_fname(ns)  = ''
+         resume_nrec(ns)   = 0
+         resume_period(ns) = -1
 
       elseif (len_trim(resume_fname(ns)) > 0 .and. lperiod /= -1) then
 
@@ -333,7 +357,7 @@
             else
                newfile         = .false.
                nrec_hist(ns)   = resume_nrec(ns)
-               period_hist(ns) = lperiod
+               period_hist(ns) = resume_period(ns)
                fname_hist(ns)  = resume_fname(ns)
                if (my_task == master_task) then
                   write(nu_diag,'(2a,a,i6,a)') subname,' Resuming ', &
@@ -343,8 +367,9 @@
          endif
 
          ! Used once, whatever the outcome.
-         resume_fname(ns) = ''
-         resume_nrec(ns)  = 0
+         resume_fname(ns)  = ''
+         resume_nrec(ns)   = 0
+         resume_period(ns) = -1
       endif
 
       if (newfile) then
@@ -1564,9 +1589,19 @@
          if (my_task == master_task) then
             write(nu_diag,*) subname,' Finished writing ',trim(ncfile)
          endif
+      elseif (period_ends) then
+         ! This was the last sample of the period, so the file is complete.
+         call pio_closefile(File)
+         file_open_hist(ns) = .false.
+         nrec_hist(ns)      = 0
+         if (my_task == master_task) then
+            write(nu_diag,'(2a,a,i6,a)') subname,' Closed ',trim(ncfile), &
+                 ' with ',nrec,' time samples'
+         endif
       else
          ! Keep the file open for the next sample of this calendar period.  It
-         ! is closed by the next call once the period changes, or by
+         ! is closed by the next call once the period changes, by the branch
+         ! above when the period's last sample is written, or by
          ! ice_write_hist_close if the run ends first.
          File_hist(ns)      = File
          fname_hist(ns)     = ncfile
@@ -1626,20 +1661,23 @@
 ! Report the history file open for stream ns, so that a restart can record it.
 ! fname is blank when no file is open.
 !
-      subroutine ice_hist_state_get(ns, fname, nrec)
+      subroutine ice_hist_state_get(ns, fname, nrec, period)
 
       integer (kind=int_kind), intent(in)  :: ns
       character (len=*),       intent(out) :: fname
       integer (kind=int_kind), intent(out) :: nrec
+      integer (kind=int_kind), intent(out) :: period
 
       character(len=*), parameter :: subname = '(ice_hist_state_get)'
 
       if (ns >= 1 .and. ns <= max_nstrm .and. file_open_hist(ns)) then
-         fname = trim(fname_hist(ns))
-         nrec  = nrec_hist(ns)
+         fname  = trim(fname_hist(ns))
+         nrec   = nrec_hist(ns)
+         period = period_hist(ns)
       else
-         fname = ''
-         nrec  = 0
+         fname  = ''
+         nrec   = 0
+         period = -1
       endif
 
       end subroutine ice_hist_state_get
@@ -1649,22 +1687,25 @@
 ! Record the history file a restart was written with, so that the next run
 ! resumes it instead of starting a new one.  A blank fname clears the state.
 !
-      subroutine ice_hist_state_set(ns, fname, nrec)
+      subroutine ice_hist_state_set(ns, fname, nrec, period)
 
       integer (kind=int_kind), intent(in) :: ns
       character (len=*),       intent(in) :: fname
       integer (kind=int_kind), intent(in) :: nrec
+      integer (kind=int_kind), intent(in) :: period
 
       character(len=*), parameter :: subname = '(ice_hist_state_set)'
 
       if (ns < 1 .or. ns > max_nstrm) return
 
       if (len_trim(fname) == 0 .or. nrec < 1) then
-         resume_fname(ns) = ''
-         resume_nrec(ns)  = 0
+         resume_fname(ns)  = ''
+         resume_nrec(ns)   = 0
+         resume_period(ns) = -1
       else
-         resume_fname(ns) = trim(fname)
-         resume_nrec(ns)  = nrec
+         resume_fname(ns)  = trim(fname)
+         resume_nrec(ns)   = nrec
+         resume_period(ns) = period
       endif
 
       end subroutine ice_hist_state_set

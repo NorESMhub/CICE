@@ -61,7 +61,7 @@
       integer (kind=int_kind) :: status
 
       ! history file left open when this restart was written
-      integer (kind=int_kind)       :: ns, hist_nrec
+      integer (kind=int_kind)       :: ns, hist_nrec, hist_period
       character(len=char_len_long)  :: hist_fname
       character(len=char_len)       :: hist_attname
 
@@ -101,8 +101,9 @@
       ! Absent attributes mean there was none, or that the restart predates
       ! this capability, so a failed read is not an error.
       do ns = 1, max_nstrm
-         hist_fname = ''
-         hist_nrec  = 0
+         hist_fname  = ''
+         hist_nrec   = 0
+         hist_period = -1
          write(hist_attname,'(a,i1.1)') 'hist_file_', ns
          status = pio_get_att(File, pio_global, trim(hist_attname), hist_fname)
          if (status == PIO_NOERR) then
@@ -110,9 +111,13 @@
             status = pio_get_att(File, pio_global, trim(hist_attname), hist_nrec)
          endif
          if (status == PIO_NOERR) then
-            call ice_hist_state_set(ns, trim(hist_fname), hist_nrec)
+            write(hist_attname,'(a,i1.1)') 'hist_period_', ns
+            status = pio_get_att(File, pio_global, trim(hist_attname), hist_period)
+         endif
+         if (status == PIO_NOERR) then
+            call ice_hist_state_set(ns, trim(hist_fname), hist_nrec, hist_period)
          else
-            call ice_hist_state_set(ns, '', 0)
+            call ice_hist_state_set(ns, '', 0, -1)
          endif
       enddo
 
@@ -206,7 +211,7 @@
       character(len=char_len_long) :: lpointer_file
 
       ! history file still open for more time samples
-      integer (kind=int_kind)      :: ns, hist_nrec
+      integer (kind=int_kind)      :: ns, hist_nrec, hist_period
       character(len=char_len_long) :: hist_fname
       character(len=char_len)      :: hist_attname
 
@@ -295,7 +300,7 @@
       ! open file contribute nothing, and a restart written by an older model
       ! simply has no such attributes, which the read side tolerates.
       do ns = 1, max_nstrm
-         call ice_hist_state_get(ns, hist_fname, hist_nrec)
+         call ice_hist_state_get(ns, hist_fname, hist_nrec, hist_period)
          if (len_trim(hist_fname) > 0) then
             write(hist_attname,'(a,i1.1)') 'hist_file_', ns
             call ice_pio_check(pio_put_att(File,pio_global, &
@@ -306,6 +311,13 @@
             call ice_pio_check(pio_put_att(File,pio_global, &
                  trim(hist_attname),hist_nrec), &
                  subname//' ERROR: writing open history record count', &
+                 file=__FILE__,line=__LINE__)
+            ! The period the file covers, so that a run resuming from this
+            ! restart does not append the next month's samples to it.
+            write(hist_attname,'(a,i1.1)') 'hist_period_', ns
+            call ice_pio_check(pio_put_att(File,pio_global, &
+                 trim(hist_attname),hist_period), &
+                 subname//' ERROR: writing open history period', &
                  file=__FILE__,line=__LINE__)
          endif
       enddo
