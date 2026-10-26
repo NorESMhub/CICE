@@ -47,8 +47,9 @@
 
       use ice_calendar, only: istep0, istep1, myear, mmonth, &
                               mday, msec, npt
-      use ice_domain_size, only: ncat
+      use ice_domain_size, only: ncat, max_nstrm
       use ice_read_write, only: ice_open
+      use ice_history_write, only: ice_hist_state_set
 
       character(len=char_len_long), intent(in), optional :: ice_ic
 
@@ -58,6 +59,11 @@
          filename, filename0
 
       integer (kind=int_kind) :: status
+
+      ! history file left open when this restart was written
+      integer (kind=int_kind)       :: ns, hist_nrec
+      character(len=char_len_long)  :: hist_fname
+      character(len=char_len)       :: hist_attname
 
       logical (kind=log_kind), save :: first_call = .true.
 
@@ -90,6 +96,25 @@
 
       call ice_pio_initdecomp(iodesc=iodesc2d, precision=8)
       call ice_pio_initdecomp(ndim3=ncat, iodesc=iodesc3d_ncat, remap=.true., precision=8)
+
+      ! Pick up any history file that was open when this restart was written.
+      ! Absent attributes mean there was none, or that the restart predates
+      ! this capability, so a failed read is not an error.
+      do ns = 1, max_nstrm
+         hist_fname = ''
+         hist_nrec  = 0
+         write(hist_attname,'(a,i1.1)') 'hist_file_', ns
+         status = pio_get_att(File, pio_global, trim(hist_attname), hist_fname)
+         if (status == PIO_NOERR) then
+            write(hist_attname,'(a,i1.1)') 'hist_nrec_', ns
+            status = pio_get_att(File, pio_global, trim(hist_attname), hist_nrec)
+         endif
+         if (status == PIO_NOERR) then
+            call ice_hist_state_set(ns, trim(hist_fname), hist_nrec)
+         else
+            call ice_hist_state_set(ns, '', 0)
+         endif
+      enddo
 
       if (use_restart_time) then
          ! for backwards compatibility, check nyr, month, and sec as well
@@ -152,7 +177,8 @@
       use ice_calendar, only: msec, mmonth, mday, myear, istep1
       use ice_domain_size, only: nx_global, ny_global, ncat, nilyr, nslyr, &
                                  n_iso, n_aero, nblyr, n_zaero, n_algae, n_doc,   &
-                                 n_dic, n_don, n_fed, n_fep, nfsd
+                                 n_dic, n_don, n_fed, n_fep, nfsd, max_nstrm
+      use ice_history_write, only: ice_hist_state_get
       use ice_dyn_shared, only: kdyn
       use ice_arrays_column, only: oceanmixed_ice
       use ice_grid, only: grid_ice
@@ -178,6 +204,11 @@
 
       character(len=char_len_long) :: filename
       character(len=char_len_long) :: lpointer_file
+
+      ! history file still open for more time samples
+      integer (kind=int_kind)      :: ns, hist_nrec
+      character(len=char_len_long) :: hist_fname
+      character(len=char_len)      :: hist_attname
 
       integer (kind=int_kind) :: &
          dimid_ncat, dimid_nilyr, dimid_nslyr, dimid_naero
@@ -258,6 +289,26 @@
            subname//' ERROR: writing restart day',file=__FILE__,line=__LINE__)
       call ice_pio_check(pio_put_att(File,pio_global,'msec',msec), &
            subname//' ERROR: writing restart sec',file=__FILE__,line=__LINE__)
+
+      ! Record any history file still open for more time samples, so that the
+      ! next run resumes it rather than starting a new one.  Streams with no
+      ! open file contribute nothing, and a restart written by an older model
+      ! simply has no such attributes, which the read side tolerates.
+      do ns = 1, max_nstrm
+         call ice_hist_state_get(ns, hist_fname, hist_nrec)
+         if (len_trim(hist_fname) > 0) then
+            write(hist_attname,'(a,i1.1)') 'hist_file_', ns
+            call ice_pio_check(pio_put_att(File,pio_global, &
+                 trim(hist_attname),trim(hist_fname)), &
+                 subname//' ERROR: writing open history file name', &
+                 file=__FILE__,line=__LINE__)
+            write(hist_attname,'(a,i1.1)') 'hist_nrec_', ns
+            call ice_pio_check(pio_put_att(File,pio_global, &
+                 trim(hist_attname),hist_nrec), &
+                 subname//' ERROR: writing open history record count', &
+                 file=__FILE__,line=__LINE__)
+         endif
+      enddo
 
       call ice_pio_check(pio_def_dim(File,'ni',nx_global,dimid_ni), &
            subname//' ERROR: defining restart dim ni',file=__FILE__,line=__LINE__)
