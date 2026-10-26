@@ -995,10 +995,10 @@
          call broadcast_scalar(dumpfreq(n),       master_task)
          call broadcast_scalar(dumpfreq_base(n),  master_task)
          call broadcast_scalar(hist_suffix(n),    master_task)
+         call broadcast_scalar(hist_file_period(n), master_task)
       enddo
       call broadcast_array(hist_avg,              master_task)
       call broadcast_array(histfreq_n,            master_task)
-      call broadcast_array(hist_file_period,      master_task)
       call broadcast_array(dumpfreq_n,            master_task)
       call broadcast_scalar(history_dir,          master_task)
       call broadcast_scalar(history_file,         master_task)
