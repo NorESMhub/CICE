@@ -573,9 +573,8 @@
 
       endif   ! newfile: the dimensions and coordinate variables are defined above
 
-      ! The names and attributes below are built on every call.  The write
-      ! phase looks each variable up by name, and a resumed file is not
-      ! defined again.
+      ! The names and attributes below are used both to define the file and to
+      ! write the time-invariant variables.
 
       !-----------------------------------------------------------------
       ! define information for required time-invariant variables
@@ -1034,6 +1033,10 @@
       allocate(workd2(nx_block,ny_block,nblocks))
       allocate(workr2(nx_block,ny_block,nblocks))
 
+      ! The coordinates, the masks, the areas and the vertex bounds do not
+      ! change with time, so they are written once when the file is created.
+      if (newfile) then
+
       do i = 1,ncoord
          if(icoord(i) .or. histfreq(ns)=='g') then
             call ice_pio_check(pio_inq_varid(File, var_coord(i)%short_name, varid), &
@@ -1227,6 +1230,8 @@
          deallocate(workd3v)
          deallocate(workr3v)
       endif  ! f_bounds
+
+      endif   ! newfile: the time-invariant variables are written above
 
       !-----------------------------------------------------------------
       ! write variable data
