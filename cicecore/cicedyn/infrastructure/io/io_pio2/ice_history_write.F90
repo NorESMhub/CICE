@@ -26,8 +26,7 @@
       use icepack_intfc, only: icepack_query_parameters
       use ice_calendar, only: write_ic, histfreq
       use ice_pio
-      use pio, only: io_desc_t, pio_freedecomp, file_desc_t, pio_closefile, &
-                     pio_syncfile
+      use pio, only: io_desc_t, pio_freedecomp, file_desc_t, pio_closefile
       use ice_domain_size, only: max_nstrm
 
       implicit none
@@ -432,6 +431,11 @@
         filename = ncfile
       end if
       call broadcast_scalar(filename, master_task)
+
+      ! construct_filename runs on the master task alone.  Every task needs
+      ! the name, because the restart records it so that the file can be
+      ! resumed.
+      ncfile = filename
 
       ! create file
       File%fh=-1
@@ -1649,12 +1653,9 @@
          ! ice_write_hist_close if the run ends first.
          !
          ! pio_write_darray does not write to disk.  It copies the data into
-         ! a buffer on the io tasks.  PIO writes that buffer out when
-         ! pio_syncfile is called or when the file is closed.  pio_syncfile is
-         ! called here so that each sample reaches disk as it is written.  A
-         ! month of daily samples would otherwise be held in memory until the
-         ! file was closed.
-         call pio_syncfile(File)
+         ! a buffer on the io tasks, which PIO writes out when the file is
+         ! closed.  The samples of a period are therefore held in memory on
+         ! the io tasks until the file is closed.
          File_hist(ns)      = File
          fname_hist(ns)     = ncfile
          nrec_hist(ns)      = nrec
