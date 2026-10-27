@@ -412,38 +412,9 @@
          nrec = nrec_hist(ns) + 1
       endif
 
-      if (newfile) then
-      if (my_task == master_task) then
-        if (write_histrest_now) then
-           call construct_filename(ncfile,'nc',ns,option='histrest')
-        else
-           call construct_filename(ncfile,'nc',ns)
-        endif
-
-        ! add local directory path name to ncfile
-        if (write_ic) then
-          ncfile = trim(incond_dir)//ncfile
-        elseif (write_histrest_now) then
-          ncfile = trim(restart_dir)//ncfile
-        else
-          ncfile = trim(history_dir)//ncfile
-        endif
-        filename = ncfile
-      end if
-      call broadcast_scalar(filename, master_task)
-
-      ! construct_filename runs on the master task alone.  Every task needs
-      ! the name, because the restart records it so that the file can be
-      ! resumed.
-      ncfile = filename
-
-      ! create file
-      File%fh=-1
-      call ice_pio_init(mode='write', filename=trim(filename), File=File, &
-           clobber=.true., fformat=trim(history_format), rearr=trim(history_rearranger), &
-           iotasks=history_iotasks, root=history_root, stride=history_stride, debug=first_call)
-
-      ! The PIO iodesc for this file are built the first time they are needed.
+      ! The PIO iodesc and the netcdf precision are needed on every call,
+      ! because the write phase below uses them and a resumed file is not
+      ! defined again.  The iodesc are built the first time they are needed.
       if (history_precision == 8) then
          iprec = 2
       else
@@ -478,6 +449,38 @@
       ! option of turning on double precision history files
       lprecision = pio_real
       if (history_precision == 8) lprecision = pio_double
+
+      if (newfile) then
+      if (my_task == master_task) then
+        if (write_histrest_now) then
+           call construct_filename(ncfile,'nc',ns,option='histrest')
+        else
+           call construct_filename(ncfile,'nc',ns)
+        endif
+
+        ! add local directory path name to ncfile
+        if (write_ic) then
+          ncfile = trim(incond_dir)//ncfile
+        elseif (write_histrest_now) then
+          ncfile = trim(restart_dir)//ncfile
+        else
+          ncfile = trim(history_dir)//ncfile
+        endif
+        filename = ncfile
+      end if
+      call broadcast_scalar(filename, master_task)
+
+      ! construct_filename runs on the master task alone.  Every task needs
+      ! the name, because the restart records it so that the file can be
+      ! resumed.
+      ncfile = filename
+
+      ! create file
+      File%fh=-1
+      call ice_pio_init(mode='write', filename=trim(filename), File=File, &
+           clobber=.true., fformat=trim(history_format), rearr=trim(history_rearranger), &
+           iotasks=history_iotasks, root=history_root, stride=history_stride, debug=first_call)
+
 
       !-----------------------------------------------------------------
       ! define dimensions
