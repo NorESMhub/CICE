@@ -50,22 +50,15 @@
 
       integer (kind=int_kind) :: imtid,jmtid
 
-      ! PIO decompositions for history output, built on the first write and
-      ! reused for every file afterwards.  pio_initdecomp binds a decomposition
-      ! to the iosystem rather than to a file, so these stay valid across files,
-      ! and every dimension they depend on is global, so one set serves all
-      ! history streams.  They are freed once in ice_write_hist_free.
+      ! PIO IO descriptors are created once and reused for every file
+      ! afterwards.  pio_initdecomp binds a decomposition to the
+      ! iosystem rather than to a file, so these stay valid across
+      ! files.  They are freed once in ice_write_hist_free.
       !
-      ! Each decomposition is cached twice, once for single precision and once
-      ! for double precision.  Both are needed because an ordinary history file
-      ! can be written in either single or double precision, while a history
-      ! restart file is always written in double precision.  Index 1 is single
-      ! precision and index 2 is double.
+      ! Each PIO iodesc is cached twice, once for single precision and once
+      ! for double precision. Index 1 is single precision and index 2 is double.
       !
-      ! A cached decomposition is not freed during the run.
-      !
-      ! The names without _c hold the decompositions in use for the current
-      ! file.
+      ! The names without _c hold the decompositions in use for the current file.
       type(io_desc_t)         :: iodesc2d, &
                                  iodesc3dc, iodesc3dv, iodesc3di, iodesc3db, iodesc3da, &
                                  iodesc3df, &
@@ -76,31 +69,31 @@
                                  iodesc4di_c(2), iodesc4ds_c(2), iodesc4df_c(2)
       logical (kind=log_kind) :: iodesc_set(2) = .false.
 
-      ! Open history file and time sample count for each stream.  A file stays
-      ! open across calls while its samples belong to the same calendar period,
-      ! so that one file can carry several time samples instead of one.
-      ! ice_write_hist_close closes whatever is still open.
+      ! The following specify the history file a stream has open,
+      ! together with its name, how many time samples have been
+      ! written to it, and which month or year those samples are from.
+      ! The file stays open until the month or year changes, so that
+      ! one file holds every sample from that month or year.
+      ! ice_write_hist_close closes whatever is still open when a run ends.
       type(file_desc_t)             :: File_hist(max_nstrm)
       integer (kind=int_kind)       :: nrec_hist(max_nstrm) = 0
       logical (kind=log_kind)       :: file_open_hist(max_nstrm) = .false.
       character (len=char_len_long) :: fname_hist(max_nstrm)
       integer (kind=int_kind)       :: period_hist(max_nstrm) = -1
 
-      ! A history file left open when a restart was written is resumed rather
-      ! than replaced.  The restart records its name and how many records it
-      ! held at that point; that count is the authority, not the length of the
-      ! file, because a run may have gone further than the restart before
-      ! stopping and those later records have to be written again.
+      ! A history file that had not yet received all the samples for
+      ! its month or year when the restart was written is resumed
+      ! rather than replaced. The restart file records its name and
+      ! how many records it held at that point.
       character (len=char_len_long) :: resume_fname(max_nstrm) = ''
       integer (kind=int_kind)       :: resume_nrec(max_nstrm) = 0
       integer (kind=int_kind)       :: resume_period(max_nstrm) = -1
 
-      ! Resuming is only correct for a continue run.  A branch or hybrid run
-      ! reads another case's restart, or the same case at an earlier date, and
-      ! is allowed to change the history frequencies and variable lists, so its
-      ! history files must be started afresh.  The driver calls
-      ! ice_hist_resume_disable for those, because the CMEPS cap maps a branch
-      ! run onto runtype 'continue' and CICE cannot tell them apart by itself.
+      ! Resuming is only applies to continuation runs not to branch
+      ! runs.  A branch run reads another case's restart and may
+      ! change the history frequencies and variable lists, so it must
+      ! start its own history files. Note that for branch runs, the
+      ! routine ice_hist_resume_disable is called from ice_comp_nuopc.F90
       logical (kind=log_kind)       :: resume_allowed = .true.
 
 !=======================================================================
@@ -215,7 +208,7 @@
       logical (kind=log_kind) :: fexists  ! resumed file is on disk
       integer (kind=int_kind) :: ntime    ! records already in a resumed file
       integer (kind=int_kind) :: timdim   ! id of the unlimited dimension
-      integer (kind=int_kind) :: lperiod  ! calendar period this sample is in
+      integer (kind=int_kind) :: lperiod  ! identifies the file this sample goes in
       integer (kind=int_kind) :: pyear, pmonth ! sample's own year and month
       integer (kind=int_kind) :: iprec    ! which cached decomposition to use
 
@@ -242,12 +235,10 @@
       ! files always hold a single time sample, whatever hist_file_period says.
       use_period = .not. (write_ic .or. write_histrest_now)
 
-      ! Which calendar period this sample belongs to, so that hist_file_period
-      ! can start a new file at a year or month boundary.  An averaged sample
-      ! written on the first day of a period belongs to the period that has
-      ! just ended, so the same adjustment construct_filename makes is made
-      ! here; otherwise the last sample of a year would land in the next year's
-      ! file.  A period of -1 means hist_file_period is not in use.
+      ! pyear and pmonth are the month and year this sample counts towards.
+      ! An average is written on the timestep after the last one it covers, so
+      ! at a month or year boundary it counts towards the one that just ended.
+      ! Hourly and instantaneous samples count towards the current date.
       pyear  = myear
       pmonth = mmonth
       period_ends = .false.
@@ -260,13 +251,9 @@
             pmonth = mmonth - 1
          endif
 
-         ! Because the date was backed up, this sample is the last one of its
-         ! month whenever a new month has begun, and the last of its year
-         ! whenever a new year has begun.  The file can therefore be closed as
-         ! soon as this sample is written, rather than waiting for the next
-         ! period's first sample to reveal that the period has ended.  Waiting
-         ! would leave a finished period unwritten, and a run that stopped in
-         ! between would lose it.
+         ! If this is the last time sample of a month or a year then
+         ! close the file as soon as the sample is written, instead of
+         ! waiting for the next sample to show that the month has changed.
          if (trim(hist_file_period(ns)) == 'month') then
             period_ends = new_month .or. new_year
          elseif (trim(hist_file_period(ns)) == 'year') then
@@ -274,9 +261,11 @@
          endif
       endif
 
-      ! The values are spelled out rather than given as single letters, so that
-      ! they cannot be read as histfreq values: hist_file_period says how the
-      ! samples are grouped into files, not how often a sample is written.
+      ! lperiod specifies which file this sample goes in.  A new file is started
+      ! when it changes.  hist_file_period sets it:
+      !    'year'    the year, so 1
+      !    'month'   year*100 + month, so 101 for January of year 1
+      !    'none'    -1, so every sample gets its own file
       lperiod = -1
       if (use_period) then
          if (trim(hist_file_period(ns)) == 'year') then
@@ -286,25 +275,18 @@
          endif
       endif
 
-      ! A file stays open while the samples still belong to the same calendar
-      ! period.  With no period in use, lperiod is -1 and period_hist is -1
-      ! only before the first file, so every call creates a new file, which is
-      ! the behaviour when hist_file_period is 'none'.
-      !
-      ! An initial condition file and a history restart file each hold one time
-      ! sample and are written to a file of their own.  use_period is false for
-      ! them, which leaves the file this stream has open untouched.
+      ! The sample goes either into the file this stream already has open or
+      ! into a new file.  With hist_file_period 'none' no file is ever left open.
       newfile = .true.
       resumed = .false.
       if (use_period .and. file_open_hist(ns)) then
          if (lperiod /= -1 .and. lperiod == period_hist(ns)) then
             newfile = .false.
          else
-            ! The period changed, so the open file is complete.  For an
-            ! averaged stream the file has normally been closed already, when
-            ! its last sample was written; this closes the ones that cannot
-            ! know in advance which sample was the last, such as an hourly
-            ! stream whose dates are not backed up.
+            ! This sample is from a different month or year, so the open file
+            ! is closed before the new one is created.  An averaged daily or
+            ! monthly stream is normally closed earlier, when its last sample
+            ! is written.
             call pio_closefile(File_hist(ns))
             if (my_task == master_task) then
                write(nu_diag,'(4a,i6,a)') subname,' Closed ', &
@@ -328,8 +310,8 @@
                   ' does not belong to this case, so it is not resumed;'// &
                   ' starting a new file'
             else
-               ! The restart was written at the end of a period, so the file it
-               ! names is complete and this sample belongs to the next one.
+               ! The file the restart names already holds its whole month or
+               ! year, and this sample is from the next one.
                write(nu_diag,*) subname,' NOTE ',trim(resume_fname(ns)), &
                   ' covers a period that has ended, so it is not resumed;'// &
                   ' starting a new file'
@@ -342,9 +324,9 @@
       elseif (use_period .and. len_trim(resume_fname(ns)) > 0 .and. &
               lperiod /= -1) then
 
-         ! A previous run left this file open when it wrote its restart.
-         ! Reopen it and carry on, rather than starting a new one.  Reasons to
-         ! give up and start fresh are reported and are never fatal.
+         ! The restart names a file that is not yet finished, so it is
+         ! reopened and added to.  Any reason not to is reported and a new
+         ! file is started instead.
          fexists = .false.
          if (my_task == master_task) then
             inquire(file=trim(resume_fname(ns)), exist=fexists)
@@ -366,9 +348,9 @@
                  rearr=trim(history_rearranger), iotasks=history_iotasks, &
                  root=history_root, stride=history_stride, debug=first_call)
 
-            ! The file must hold at least the records the restart accounts for.
-            ! It may hold more, from a run that went past the restart before
-            ! stopping; those are overwritten as they are recomputed.
+            ! The count in the restart is the authority, not the length of
+            ! the file.  A run that got further than its restart before dying
+            ! left extra records, which are written again.
             call pio_seterrorhandling(File, PIO_RETURN_ERROR)
             status = pio_inq_dimid(File, 'time', timdim)
             if (status == PIO_NOERR) then
@@ -396,7 +378,7 @@
             endif
          endif
 
-         ! Used once, whatever the outcome.
+         ! The restart's record is used once, whether or not it was resumed.
          resume_fname(ns)  = ''
          resume_nrec(ns)   = 0
          resume_period(ns) = -1
@@ -1654,7 +1636,7 @@
             write(nu_diag,*) subname,' Finished writing ',trim(ncfile)
          endif
       elseif (period_ends) then
-         ! This was the last sample of the period, so the file is complete.
+         ! This was the last sample of the month or year.
          call pio_closefile(File)
          file_open_hist(ns) = .false.
          nrec_hist(ns)      = 0
@@ -1663,15 +1645,9 @@
                  ' with ',nrec,' time samples'
          endif
       else
-         ! Keep the file open for the next sample of this calendar period.  It
-         ! is closed by the next call once the period changes, by the branch
-         ! above when the period's last sample is written, or by
-         ! ice_write_hist_close if the run ends first.
-         !
-         ! pio_write_darray does not write to disk.  It copies the data into
-         ! a buffer on the io tasks, which PIO writes out when the file is
-         ! closed.  The samples of a period are therefore held in memory on
-         ! the io tasks until the file is closed.
+         ! The file is kept open for the next sample of this month or year.
+         ! PIO holds each sample on the io tasks and writes them all out when
+         ! the file is closed.
          File_hist(ns)      = File
          fname_hist(ns)     = ncfile
          nrec_hist(ns)      = nrec
@@ -1700,9 +1676,7 @@
 
 !=======================================================================
 !
-! Close any history file left open for further time samples.  Call at the end
-! of a run segment so that no file is left open.  Safe to call when nothing is
-! open.
+! Close any history file still open.  Called at the end of a run.
 !
       subroutine ice_write_hist_close
 
@@ -1727,7 +1701,7 @@
 
 !=======================================================================
 !
-! Report the history file open for stream ns, so that a restart can record it.
+! Return the history file stream ns has open, for a restart to record.
 ! fname is blank when no file is open.
 !
       subroutine ice_hist_state_get(ns, fname, nrec, period)
@@ -1753,8 +1727,8 @@
 
 !=======================================================================
 !
-! Record the history file a restart was written with, so that the next run
-! resumes it instead of starting a new one.  A blank fname clears the state.
+! Record the history file named by a restart, for the next run to resume.
+! A blank fname clears it.
 !
       subroutine ice_hist_state_set(ns, fname, nrec, period)
 
