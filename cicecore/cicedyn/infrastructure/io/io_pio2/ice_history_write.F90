@@ -26,7 +26,8 @@
       use icepack_intfc, only: icepack_query_parameters
       use ice_calendar, only: write_ic, histfreq
       use ice_pio
-      use pio, only: io_desc_t, pio_freedecomp, file_desc_t, pio_closefile
+      use pio, only: io_desc_t, pio_freedecomp, file_desc_t, pio_closefile, &
+                     pio_syncfile
       use ice_domain_size, only: max_nstrm
 
       implicit none
@@ -55,12 +56,26 @@
       ! to the iosystem rather than to a file, so these stay valid across files,
       ! and every dimension they depend on is global, so one set serves all
       ! history streams.  They are freed once in ice_write_hist_free.
+      !
+      ! Each decomposition is cached twice, once for single precision and once
+      ! for double precision.  Both are needed because an ordinary history file
+      ! can be written in either single or double precision, while a history
+      ! restart file is always written in double precision.  Index 1 is single
+      ! precision and index 2 is double.
+      !
+      ! A cached decomposition is not freed during the run.
+      !
+      ! The names without _c hold the decompositions in use for the current
+      ! file.
       type(io_desc_t)         :: iodesc2d, &
                                  iodesc3dc, iodesc3dv, iodesc3di, iodesc3db, iodesc3da, &
                                  iodesc3df, &
                                  iodesc4di, iodesc4ds, iodesc4df
-      logical (kind=log_kind) :: iodesc_set = .false.
-      integer (kind=int_kind) :: iodesc_precision = -1
+      type(io_desc_t)         :: iodesc2d_c(2), &
+                                 iodesc3dc_c(2), iodesc3dv_c(2), iodesc3di_c(2), &
+                                 iodesc3db_c(2), iodesc3da_c(2), iodesc3df_c(2), &
+                                 iodesc4di_c(2), iodesc4ds_c(2), iodesc4df_c(2)
+      logical (kind=log_kind) :: iodesc_set(2) = .false.
 
       ! Open history file and time sample count for each stream.  A file stays
       ! open across calls while its samples belong to the same calendar period,
@@ -203,6 +218,7 @@
       integer (kind=int_kind) :: timdim   ! id of the unlimited dimension
       integer (kind=int_kind) :: lperiod  ! calendar period this sample is in
       integer (kind=int_kind) :: pyear, pmonth ! sample's own year and month
+      integer (kind=int_kind) :: iprec    ! which cached decomposition to use
 
       character(len=*), parameter :: subname = '(ice_write_hist)'
 
@@ -418,24 +434,37 @@
            clobber=.true., fformat=trim(history_format), rearr=trim(history_rearranger), &
            iotasks=history_iotasks, root=history_root, stride=history_stride, debug=first_call)
 
-      ! history_precision is forced to 8 while a history restart file is being
-      ! written, so the cache records the precision it was built with and is
-      ! rebuilt whenever that changes.
-      if (.not. iodesc_set .or. iodesc_precision /= history_precision) then
-         call ice_write_hist_free()
-         call ice_pio_initdecomp(iodesc=iodesc2d, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=ncat_hist, iodesc=iodesc3dc, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzilyr,    iodesc=iodesc3di, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzblyr,    iodesc=iodesc3db, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzalyr,    iodesc=iodesc3da, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nfsd_hist, iodesc=iodesc3df, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nverts,    iodesc=iodesc3dv, inner_dim=.true., precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzilyr,    ndim4=ncat_hist, iodesc=iodesc4di, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzslyr,    ndim4=ncat_hist, iodesc=iodesc4ds, precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nfsd_hist, ndim4=ncat_hist, iodesc=iodesc4df, precision=history_precision)
-         iodesc_precision = history_precision
-         iodesc_set = .true.
+      ! The PIO iodesc for this file are built the first time they are needed.
+      if (history_precision == 8) then
+         iprec = 2
+      else
+         iprec = 1
       endif
+
+      if (.not. iodesc_set(iprec)) then
+         call ice_pio_initdecomp(iodesc=iodesc2d_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=ncat_hist, iodesc=iodesc3dc_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzilyr,    iodesc=iodesc3di_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzblyr,    iodesc=iodesc3db_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzalyr,    iodesc=iodesc3da_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nfsd_hist, iodesc=iodesc3df_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nverts,    iodesc=iodesc3dv_c(iprec), inner_dim=.true., precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzilyr,    ndim4=ncat_hist, iodesc=iodesc4di_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzslyr,    ndim4=ncat_hist, iodesc=iodesc4ds_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nfsd_hist, ndim4=ncat_hist, iodesc=iodesc4df_c(iprec), precision=history_precision)
+         iodesc_set(iprec) = .true.
+      endif
+
+      iodesc2d  = iodesc2d_c(iprec)
+      iodesc3dc = iodesc3dc_c(iprec)
+      iodesc3dv = iodesc3dv_c(iprec)
+      iodesc3di = iodesc3di_c(iprec)
+      iodesc3db = iodesc3db_c(iprec)
+      iodesc3da = iodesc3da_c(iprec)
+      iodesc3df = iodesc3df_c(iprec)
+      iodesc4di = iodesc4di_c(iprec)
+      iodesc4ds = iodesc4ds_c(iprec)
+      iodesc4df = iodesc4df_c(iprec)
 
       ! option of turning on double precision history files
       lprecision = pio_real
@@ -1613,6 +1642,14 @@
          ! is closed by the next call once the period changes, by the branch
          ! above when the period's last sample is written, or by
          ! ice_write_hist_close if the run ends first.
+         !
+         ! pio_write_darray does not write to disk.  It copies the data into
+         ! a buffer on the io tasks.  PIO writes that buffer out when
+         ! pio_syncfile is called or when the file is closed.  pio_syncfile is
+         ! called here so that each sample reaches disk as it is written.  A
+         ! month of daily samples would otherwise be held in memory until the
+         ! file was closed.
+         call pio_syncfile(File)
          File_hist(ns)      = File
          fname_hist(ns)     = ncfile
          nrec_hist(ns)      = nrec
@@ -1741,23 +1778,23 @@
 !
       subroutine ice_write_hist_free
 
+      integer (kind=int_kind) :: n
       character(len=*), parameter :: subname = '(ice_write_hist_free)'
 
-      if (.not. iodesc_set) return
-
-      call pio_freedecomp(ice_pio_subsystem, iodesc2d)
-      call pio_freedecomp(ice_pio_subsystem, iodesc3dv)
-      call pio_freedecomp(ice_pio_subsystem, iodesc3dc)
-      call pio_freedecomp(ice_pio_subsystem, iodesc3di)
-      call pio_freedecomp(ice_pio_subsystem, iodesc3db)
-      call pio_freedecomp(ice_pio_subsystem, iodesc3da)
-      call pio_freedecomp(ice_pio_subsystem, iodesc3df)
-      call pio_freedecomp(ice_pio_subsystem, iodesc4di)
-      call pio_freedecomp(ice_pio_subsystem, iodesc4ds)
-      call pio_freedecomp(ice_pio_subsystem, iodesc4df)
-
-      iodesc_set = .false.
-      iodesc_precision = -1
+      do n = 1, 2
+         if (.not. iodesc_set(n)) cycle
+         call pio_freedecomp(ice_pio_subsystem, iodesc2d_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc3dv_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc3dc_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc3di_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc3db_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc3da_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc3df_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc4di_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc4ds_c(n))
+         call pio_freedecomp(ice_pio_subsystem, iodesc4df_c(n))
+         iodesc_set(n) = .false.
+      enddo
 
       end subroutine ice_write_hist_free
 
