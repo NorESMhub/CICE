@@ -568,6 +568,12 @@
 
       endif  ! histfreq(ns)/='g'
 
+      endif   ! newfile: the dimensions and coordinate variables are defined above
+
+      ! The names and attributes below are built on every call.  The write
+      ! phase looks each variable up by name, and a resumed file is not
+      ! defined again.
+
       !-----------------------------------------------------------------
       ! define information for required time-invariant variables
       !-----------------------------------------------------------------
@@ -700,6 +706,8 @@
       var_nverts(n_latn_bnds) = coord_attributes('latn_bounds','latitude bounds (N-cell)','degrees_north','und')
       var_nverts(n_lone_bnds) = coord_attributes('lone_bounds','longitude bounds (E-cell)','degrees_east','und')
       var_nverts(n_late_bnds) = coord_attributes('late_bounds','latitude bounds (E-cell)','degrees_north','und')
+
+      if (newfile) then
 
       !-----------------------------------------------------------------
       ! define attributes for time-invariant variables
