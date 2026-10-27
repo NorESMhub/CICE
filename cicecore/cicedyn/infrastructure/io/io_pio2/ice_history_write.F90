@@ -1066,7 +1066,7 @@
                     workr2, status, fillval=spval)
             endif
 
-            call ice_pio_check(status,subname//' ERROR: writing '//avail_hist_fields(n)%vname, &
+            call ice_pio_check(status,subname//' ERROR: writing '//var_coord(i)%short_name, &
                                file=__FILE__,line=__LINE__)
          endif
       enddo
@@ -1161,7 +1161,7 @@
                     workr2, status, fillval=spval)
             endif
 
-            call ice_pio_check(status,subname//' ERROR: writing '//avail_hist_fields(n)%vname, &
+            call ice_pio_check(status,subname//' ERROR: writing '//var_grd(i)%req%short_name, &
                                file=__FILE__,line=__LINE__)
          endif
       enddo
@@ -1221,7 +1221,7 @@
                                      workr3v, status, fillval=spval)
             endif
 
-            call ice_pio_check(status,subname//' ERROR: writing '//avail_hist_fields(n)%vname, &
+            call ice_pio_check(status,subname//' ERROR: writing '//var_nverts(i)%short_name, &
                                file=__FILE__,line=__LINE__)
          enddo
          deallocate(workd3v)
