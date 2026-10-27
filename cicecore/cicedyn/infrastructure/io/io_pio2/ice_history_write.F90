@@ -291,9 +291,13 @@
       ! period.  With no period in use, lperiod is -1 and period_hist is -1
       ! only before the first file, so every call creates a new file, which is
       ! the behaviour when hist_file_period is 'none'.
+      !
+      ! An initial condition file and a history restart file each hold one time
+      ! sample and are written to a file of their own.  use_period is false for
+      ! them, which leaves the file this stream has open untouched.
       newfile = .true.
       resumed = .false.
-      if (file_open_hist(ns)) then
+      if (use_period .and. file_open_hist(ns)) then
          if (lperiod /= -1 .and. lperiod == period_hist(ns)) then
             newfile = .false.
          else
@@ -310,7 +314,7 @@
             file_open_hist(ns) = .false.
             nrec_hist(ns)      = 0
          endif
-      elseif (len_trim(resume_fname(ns)) > 0 .and. &
+      elseif (use_period .and. len_trim(resume_fname(ns)) > 0 .and. &
               (.not. resume_allowed .or. &
                index(trim(resume_fname(ns)), trim(history_file)) == 0 .or. &
                resume_period(ns) /= lperiod)) then
@@ -336,7 +340,8 @@
          resume_nrec(ns)   = 0
          resume_period(ns) = -1
 
-      elseif (len_trim(resume_fname(ns)) > 0 .and. lperiod /= -1) then
+      elseif (use_period .and. len_trim(resume_fname(ns)) > 0 .and. &
+              lperiod /= -1) then
 
          ! A previous run left this file open when it wrote its restart.
          ! Reopen it and carry on, rather than starting a new one.  Reasons to
