@@ -394,40 +394,6 @@
          nrec = nrec_hist(ns) + 1
       endif
 
-      ! The PIO iodesc and the netcdf precision are needed on every call,
-      ! because the write phase below uses them and a resumed file is not
-      ! defined again.  The iodesc are built the first time they are needed.
-      if (history_precision == 8) then
-         iprec = 2
-      else
-         iprec = 1
-      endif
-
-      if (.not. iodesc_set(iprec)) then
-         call ice_pio_initdecomp(iodesc=iodesc2d_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=ncat_hist, iodesc=iodesc3dc_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzilyr,    iodesc=iodesc3di_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzblyr,    iodesc=iodesc3db_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzalyr,    iodesc=iodesc3da_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nfsd_hist, iodesc=iodesc3df_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nverts,    iodesc=iodesc3dv_c(iprec), inner_dim=.true., precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzilyr,    ndim4=ncat_hist, iodesc=iodesc4di_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nzslyr,    ndim4=ncat_hist, iodesc=iodesc4ds_c(iprec), precision=history_precision)
-         call ice_pio_initdecomp(ndim3=nfsd_hist, ndim4=ncat_hist, iodesc=iodesc4df_c(iprec), precision=history_precision)
-         iodesc_set(iprec) = .true.
-      endif
-
-      iodesc2d  = iodesc2d_c(iprec)
-      iodesc3dc = iodesc3dc_c(iprec)
-      iodesc3dv = iodesc3dv_c(iprec)
-      iodesc3di = iodesc3di_c(iprec)
-      iodesc3db = iodesc3db_c(iprec)
-      iodesc3da = iodesc3da_c(iprec)
-      iodesc3df = iodesc3df_c(iprec)
-      iodesc4di = iodesc4di_c(iprec)
-      iodesc4ds = iodesc4ds_c(iprec)
-      iodesc4df = iodesc4df_c(iprec)
-
       ! option of turning on double precision history files
       lprecision = pio_real
       if (history_precision == 8) lprecision = pio_double
@@ -974,6 +940,39 @@
            subname//' ERROR: ending pio definitions',file=__FILE__,line=__LINE__)
 
       endif   ! newfile: everything above defines a newly created file
+
+      ! The iodesc are selected on every write and built on the first one.
+      ! This must come after ice_pio_init, which sets up ice_pio_subsystem.
+      if (history_precision == 8) then
+         iprec = 2
+      else
+         iprec = 1
+      endif
+
+      if (.not. iodesc_set(iprec)) then
+         call ice_pio_initdecomp(iodesc=iodesc2d_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=ncat_hist, iodesc=iodesc3dc_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzilyr,    iodesc=iodesc3di_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzblyr,    iodesc=iodesc3db_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzalyr,    iodesc=iodesc3da_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nfsd_hist, iodesc=iodesc3df_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nverts,    iodesc=iodesc3dv_c(iprec), inner_dim=.true., precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzilyr,    ndim4=ncat_hist, iodesc=iodesc4di_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nzslyr,    ndim4=ncat_hist, iodesc=iodesc4ds_c(iprec), precision=history_precision)
+         call ice_pio_initdecomp(ndim3=nfsd_hist, ndim4=ncat_hist, iodesc=iodesc4df_c(iprec), precision=history_precision)
+         iodesc_set(iprec) = .true.
+      endif
+
+      iodesc2d  = iodesc2d_c(iprec)
+      iodesc3dc = iodesc3dc_c(iprec)
+      iodesc3dv = iodesc3dv_c(iprec)
+      iodesc3di = iodesc3di_c(iprec)
+      iodesc3db = iodesc3db_c(iprec)
+      iodesc3da = iodesc3da_c(iprec)
+      iodesc3df = iodesc3df_c(iprec)
+      iodesc4di = iodesc4di_c(iprec)
+      iodesc4ds = iodesc4ds_c(iprec)
+      iodesc4df = iodesc4df_c(iprec)
 
       !-----------------------------------------------------------------
       ! write time and time bounds info
