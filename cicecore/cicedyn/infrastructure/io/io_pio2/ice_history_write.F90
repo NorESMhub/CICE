@@ -26,7 +26,8 @@
       use icepack_intfc, only: icepack_query_parameters
       use ice_calendar, only: write_ic, histfreq
       use ice_pio
-      use pio, only: io_desc_t, pio_freedecomp, file_desc_t, pio_closefile
+      use pio, only: io_desc_t, pio_freedecomp, file_desc_t, pio_closefile, &
+                     pio_syncfile
       use ice_domain_size, only: max_nstrm
 
       implicit none
@@ -45,7 +46,7 @@
       END TYPE req_attributes
 
       public :: ice_write_hist, ice_read_hist, ice_write_hist_free, &
-                ice_write_hist_close, ice_hist_state_get, ice_hist_state_set, &
+                ice_write_hist_close, ice_write_hist_sync, ice_hist_state_get, ice_hist_state_set, &
                 ice_hist_resume_disable
 
       integer (kind=int_kind) :: imtid,jmtid
@@ -1672,6 +1673,22 @@
       first_call = .false.
 
       end subroutine ice_write_hist
+
+!=======================================================================
+!
+! Flush any history file still open, so that what is on disk matches the record
+! count a restart is about to write.  Called when a restart is written.
+!
+      subroutine ice_write_hist_sync
+
+      integer (kind=int_kind) :: ns
+      character(len=*), parameter :: subname = '(ice_write_hist_sync)'
+
+      do ns = 1, max_nstrm
+         if (file_open_hist(ns)) call pio_syncfile(File_hist(ns))
+      enddo
+
+      end subroutine ice_write_hist_sync
 
 !=======================================================================
 !

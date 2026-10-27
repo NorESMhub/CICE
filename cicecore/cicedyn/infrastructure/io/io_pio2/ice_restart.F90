@@ -183,7 +183,7 @@
       use ice_domain_size, only: nx_global, ny_global, ncat, nilyr, nslyr, &
                                  n_iso, n_aero, nblyr, n_zaero, n_algae, n_doc,   &
                                  n_dic, n_don, n_fed, n_fep, nfsd, max_nstrm
-      use ice_history_write, only: ice_hist_state_get
+      use ice_history_write, only: ice_hist_state_get, ice_write_hist_sync
       use ice_dyn_shared, only: kdyn
       use ice_arrays_column, only: oceanmixed_ice
       use ice_grid, only: grid_ice
@@ -295,10 +295,11 @@
       call ice_pio_check(pio_put_att(File,pio_global,'msec',msec), &
            subname//' ERROR: writing restart sec',file=__FILE__,line=__LINE__)
 
-      ! Record any history file still open for more time samples, so that the
-      ! next run resumes it rather than starting a new one.  Streams with no
-      ! open file contribute nothing, and a restart written by an older model
-      ! simply has no such attributes, which the read side tolerates.
+      ! Record any history file still open, so that the next run resumes it.
+      ! Each one is flushed first, so that what is on disk matches the count
+      ! recorded here even if this run does not reach its own end.
+      call ice_write_hist_sync()
+
       do ns = 1, max_nstrm
          call ice_hist_state_get(ns, hist_fname, hist_nrec, hist_period)
          if (len_trim(hist_fname) > 0) then
