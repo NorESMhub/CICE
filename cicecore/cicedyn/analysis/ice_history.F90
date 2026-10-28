@@ -3113,6 +3113,7 @@
            do i = ilo, ihi
               if (aice(i,j,iblk) > puny) then
 !                Add in frazil flux
+                 dfresh=0.0_dbl_kind
                  if (.not. update_ocn_f) then
                     if ( ktherm == 2 .and. cpl_frazil == 'fresh_ice_correction') then
                        dfresh = -rhoi*(frazil(i,j,iblk)-frazil_diag(i,j,iblk))/dt
@@ -3143,6 +3144,7 @@
            do i = ilo, ihi
               if (aice(i,j,iblk) > puny) then
 !                Add in frazil flux
+                 dfresh=0.0_dbl_kind
                  if (.not. update_ocn_f) then
                     if ( ktherm == 2 .and. cpl_frazil == 'fresh_ice_correction') then
                        dfresh = -rhoi*(frazil(i,j,iblk)-frazil_diag(i,j,iblk))/dt
