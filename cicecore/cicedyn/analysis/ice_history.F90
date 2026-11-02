@@ -3412,8 +3412,8 @@
            jlo = this_block%jlo
            jhi = this_block%jhi
 
-           ! Ice fraction really needs to be on one of the history
-           ! streams, but in case it is not.
+           ! Abort if the ice area a conditional average is divided by is not on
+           ! this stream.
 
            if (n_aice(ns) > 0 .and. any(avail_hist_fields(:)%avg_ice_present == 'final')) then
               do j = jlo, jhi
@@ -3425,8 +3425,10 @@
                  endif
               enddo             ! i
               enddo             ! j
-           elseif (f_aice(1:1) == 'x' .and. any(avail_hist_fields(:)%avg_ice_present == 'final')) then
-              call abort_ice(subname//' ERROR: f_aice must be defined', file=__FILE__, line=__LINE__)
+           elseif (any(avail_hist_fields(1:num_avail_hist_fields_2D)%avg_ice_present == 'final' .and. &
+                       avail_hist_fields(1:num_avail_hist_fields_2D)%vhistfreq == histfreq(ns))) then
+              call abort_ice(subname//' ERROR: f_aice must include histfreq '//histfreq(ns), &
+                   file=__FILE__, line=__LINE__)
            endif
            if (n_aice_init(ns) > 0 .and. any(avail_hist_fields(:)%avg_ice_present == 'init')) then
               do j = jlo, jhi
@@ -3438,8 +3440,10 @@
                  endif
               enddo             ! i
               enddo             ! j
-           elseif (f_aice_init(1:1) == 'x' .and. any(avail_hist_fields(:)%avg_ice_present == 'init')) then
-              call abort_ice(subname//' ERROR: f_aice_init must be defined', file=__FILE__, line=__LINE__)
+           elseif (any(avail_hist_fields(1:num_avail_hist_fields_2D)%avg_ice_present == 'init' .and. &
+                       avail_hist_fields(1:num_avail_hist_fields_2D)%vhistfreq == histfreq(ns))) then
+              call abort_ice(subname//' ERROR: f_aice_init must include histfreq '//histfreq(ns), &
+                   file=__FILE__, line=__LINE__)
            endif
            if (n_apond_ai(ns) > 0 .and. any(avail_hist_fields(:)%avg_ice_present == 'pond')) then
               do j = jlo, jhi
@@ -3451,8 +3455,10 @@
                  endif
               enddo             ! i
               enddo             ! j
-           elseif (f_apond_ai(1:1) == 'x' .and. any(avail_hist_fields(:)%avg_ice_present == 'pond')) then
-              call abort_ice(subname//' ERROR: f_apond_ai must be defined', file=__FILE__, line=__LINE__)
+           elseif (any(avail_hist_fields(1:num_avail_hist_fields_2D)%avg_ice_present == 'pond' .and. &
+                       avail_hist_fields(1:num_avail_hist_fields_2D)%vhistfreq == histfreq(ns))) then
+              call abort_ice(subname//' ERROR: f_apond_ai must include histfreq '//histfreq(ns), &
+                   file=__FILE__, line=__LINE__)
            endif
            if (n_ardg(ns) > 0 .and. any(avail_hist_fields(:)%avg_ice_present == 'ridge')) then
               do j = jlo, jhi
@@ -3464,8 +3470,10 @@
                  endif
               enddo             ! i
               enddo             ! j
-           elseif (f_ardg(1:1) == 'x' .and. any(avail_hist_fields(:)%avg_ice_present == 'ridge')) then
-              call abort_ice(subname//' ERROR: f_ardg must be defined', file=__FILE__, line=__LINE__)
+           elseif (any(avail_hist_fields(1:num_avail_hist_fields_2D)%avg_ice_present == 'ridge' .and. &
+                       avail_hist_fields(1:num_avail_hist_fields_2D)%vhistfreq == histfreq(ns))) then
+              call abort_ice(subname//' ERROR: f_ardg must include histfreq '//histfreq(ns), &
+                   file=__FILE__, line=__LINE__)
            endif
            if (n_aicen(ns) > n2D .and. any(avail_hist_fields(:)%avg_ice_present == 'final')) then
               do k=1,ncat_hist
@@ -3479,8 +3487,10 @@
               enddo             ! i
               enddo             ! j
               enddo             ! k
-           elseif (f_aicen(1:1) == 'x' .and. any(avail_hist_fields(:)%avg_ice_present == 'final')) then
-              call abort_ice(subname//' ERROR: f_aicen must be defined', file=__FILE__, line=__LINE__)
+           elseif (any(avail_hist_fields(n2D+1:n2D+num_avail_hist_fields_3Dc)%avg_ice_present /= 'none' .and. &
+                       avail_hist_fields(n2D+1:n2D+num_avail_hist_fields_3Dc)%vhistfreq == histfreq(ns))) then
+              call abort_ice(subname//' ERROR: f_aicen must include histfreq '//histfreq(ns), &
+                   file=__FILE__, line=__LINE__)
            endif
 
            do n = 1, num_avail_hist_fields_2D
